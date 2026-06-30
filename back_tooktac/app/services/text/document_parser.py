@@ -1,6 +1,4 @@
 from google.cloud import documentai
-from google.cloud import storage
-from prettytable import PrettyTable
 import google.generativeai as genai
 import re
 import os
@@ -9,34 +7,21 @@ import hashlib
 from datetime import datetime
 from typing import Dict, Any, Optional
 from pathlib import Path
+from app.config import GEMINI_API_KEY, GEMINI_MODEL_NAME, PROJECT_ID, LOCATION, PROCESSOR_ID
 from app.services.extrack.hwpx_extractor import hwpx_to_html
 from app.services.extrack.docx_extractor import extract_text_from_docx
 
 
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-
-gemini_api_key = os.getenv('GOOGLE_API_KEY')
-genai.configure(api_key=gemini_api_key)
-
-project_id = os.getenv("PROJECT_ID")
-processor_id = os.getenv("PROCESSOR_ID")
-location = os.getenv("LOCATION", "us")
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-
 class VertexDocumentParser:
     """Vertex AI Document AI와 Gemini를 사용한 문서 파싱 및 구조화 클래스"""
 
-    def __init__(self, project_id: str, location: str, processor_id: str, gemini_api_key: str):
-        self.processor_name = f"projects/{project_id}/locations/{location}/processors/{processor_id}"
+    def __init__(self):
+        self.processor_name = f"projects/{PROJECT_ID}/locations/{LOCATION}/processors/{PROCESSOR_ID}"
         self.client = documentai.DocumentProcessorServiceClient()
         self.storage_path = "parsed_documents/"
 
-        genai.configure(api_key=gemini_api_key)
-        self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+        genai.configure(api_key=GEMINI_API_KEY)
+        self.gemini_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
         os.makedirs(self.storage_path, exist_ok=True)
 
@@ -173,3 +158,8 @@ class VertexDocumentParser:
         """문서를 파싱하고 저장하는 통합 메서드"""
         parsed = self.parse_document(file_path)
         return self.save_parsed_data(file_path, parsed)
+
+# %%
+# 사용 예시
+if __name__ == "__main__":
+    parser = VertexDocumentParser()
