@@ -94,6 +94,7 @@ yarn-error.log*
 *.pem
 *.key
 *.secret
+vito_jwt_token.json
 
 # =========================
 # Runtime
