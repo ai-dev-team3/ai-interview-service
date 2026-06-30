@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { signup, checkUsername } from '@/api/api';
 import { useRouter } from 'next/navigation';
+import ResumeUploader from '@/components/ResumeUploader';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -17,9 +18,9 @@ export default function SignupPage() {
     nickname: '',
     email: '',
     birthdate: '',
-    desiredJob: '',       // 영문 코드(frontend, backend, ...)
-    resume: null as File | null,
+    desiredJob: '',
   });
+  const [extractedResumeText, setExtractedResumeText] = useState('');
 
   // 2) 중복 상태 제거: showPassword, showConfirmPassword, usernameStatus만 유지
   const [showPassword, setShowPassword] = useState(false);
@@ -39,14 +40,7 @@ export default function SignupPage() {
     setFormData(prev => ({ ...prev, desiredJob: value }));
   };
 
-  // 5) 파일 변경 핸들러
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFormData(prev => ({ ...prev, resume: e.target.files![0] }));
-    }
-  };
-
-  // 6) 아이디 중복 확인
+  // 5) 아이디 중복 확인
   const checkUsernameAvailability = async () => {
     if (!formData.username.trim()) {
       alert('아이디를 입력해주세요.');
@@ -84,8 +78,8 @@ export default function SignupPage() {
     form.append('nickname', formData.nickname);
     form.append('email', formData.email);
     form.append('birthdate', formData.birthdate);
-    form.append('desiredJob', formData.desiredJob); // 영문 코드 전송
-    if (formData.resume) form.append('resume', formData.resume);
+    form.append('desiredJob', formData.desiredJob);
+    if (extractedResumeText) form.append('resume_text', extractedResumeText);
 
     try {
       const result = await signup(form);
@@ -276,30 +270,7 @@ export default function SignupPage() {
               {/* 이력서 업로드 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">이력서 업로드</label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    name="resume"
-                    onChange={handleFileChange}
-                    accept=".pdf,.doc,.docx"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    id="resume-upload"
-                    required
-                  />
-                  <div className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-[#6ce5e8] hover:bg-blue-50/50 transition-colors cursor-pointer">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full mb-3">
-                        <i className="ri-upload-cloud-2-line text-2xl text-gray-400"></i>
-                      </div>
-                      <p className="text-sm font-medium text-gray-700 mb-1">
-                        {formData.resume ? formData.resume.name : '파일을 선택하거나 드래그해서 업로드'}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        PDF, HWPX 파일만 업로드 가능 (최대 10MB)
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <ResumeUploader onExtracted={(text: string) => setExtractedResumeText(text)} />
               </div>
 
               <button
