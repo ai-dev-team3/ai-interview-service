@@ -1,17 +1,17 @@
 import google.generativeai as genai
-import os
 import json
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from app.config import GEMINI_API_KEY, GEMINI_MODEL_NAME
 from app.repository.resume import Resume
 
 class InterviewQuestionGenerator:
     """Gemini API를 사용한 면접 질문 생성 클래스"""
     
-    def __init__(self, gemini_api_key: str):
-        genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
-        self.storage_path = "parsed_documents/"
+    def __init__(self):
+        genai.configure(api_key=GEMINI_API_KEY)
+        self.model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        # self.storage_path = "parsed_documents/"
     
     # def load_parsed_data(self, doc_id: str) -> Dict[str, Any]:
     #     """저장된 파싱 데이터 불러오기"""

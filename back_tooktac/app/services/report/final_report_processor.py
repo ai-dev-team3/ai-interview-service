@@ -1,27 +1,11 @@
 # %%
-from google.cloud import documentai
-from google.cloud import storage
-from prettytable import PrettyTable
 import google.generativeai as genai
-import re
 import json
 from typing import Dict, List, Union
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-gemini_api_key = os.getenv('GOOGLE_API_KEY')
-genai.configure(api_key=gemini_api_key)
-
-project_id = os.getenv("PROJECT_ID")
-processor_id = os.getenv("PROCESSOR_ID")
-location = os.getenv("LOCATION", "us")
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-
+from app.config import GEMINI_API_KEY, GEMINI_MODEL_NAME
 
 # %%
 # data_parser
@@ -277,7 +261,6 @@ class DataParser:
 # %%
 # score_aggregator
 
-from typing import List, Dict
 import statistics
 
 
@@ -690,7 +673,6 @@ class GeminiAdvisor:
 # %%
 # report_builder
 
-from typing import Dict, List
 from datetime import datetime
 
 
@@ -717,10 +699,10 @@ class ReportBuilder:
     def build_final_report(
             self,
             user_info: UserInfo,
-            question_analyses: List[QuestionAnalysis],
+            # question_analyses: List[QuestionAnalysis],
             aggregated_scores: Dict,
             ai_advice: Dict,
-            step_names: List[str]
+            # step_names: List[str]
 
     ) -> Dict:
         """
@@ -757,7 +739,7 @@ class ReportBuilder:
             },
 
             # 종합 평가 점수
-            'total_evaluation': aggregated_scores['total_evaluation'],
+            # 'total_evaluation': aggregated_scores['total_evaluation'],  # 밑줄이랑 중복
 
             # 등급 메시지
             'total_evaluation': {
@@ -785,9 +767,9 @@ class ReportBuilder:
 # %%
 # 최종 보고서 생성 클래스
 class FinalEvaluationGenerator:
-    def __init__(self, gemini_api_key: str, model_name: str = "gemini-2.5-flash"):
-        genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel(model_name)
+    def __init__(self):
+        genai.configure(api_key=GEMINI_API_KEY)
+        self.model = genai.GenerativeModel(GEMINI_MODEL_NAME )
         self.generation_config = genai.types.GenerationConfig(
             temperature=0.7,
             top_p=0.8,
@@ -865,6 +847,9 @@ class FinalEvaluationGenerator:
             raise
 
 
-
+# %%
+# 사용 예시
+if __name__ == "__main__":
+    generator = FinalEvaluationGenerator()
 
 
