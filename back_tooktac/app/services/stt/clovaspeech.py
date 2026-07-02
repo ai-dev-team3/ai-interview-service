@@ -1,6 +1,10 @@
+import logging
 import requests
 import json
 import os
+
+
+logger = logging.getLogger(__name__)
 
 class ClovaSpeechClient:
     # Clova Speech invoke URL (앱 등록 시 발급받은 Invoke URL)
@@ -74,7 +78,7 @@ class ClovaSpeechClient:
             'Accept': 'application/json;UTF-8',
             'X-CLOVASPEECH-API-KEY': self.secret
         }
-        print(json.dumps(request_body, ensure_ascii=False).encode('UTF-8'))
+        logger.debug("Clova 요청 바디: %s", json.dumps(request_body, ensure_ascii=False))
         files = {
             'media': open(file, 'rb'),
             'params': (None, json.dumps(request_body, ensure_ascii=False).encode('UTF-8'), 'application/json')
@@ -89,14 +93,13 @@ class ClovaSpeechClient:
             segments = data.get("segments", [])
 
             for seg in segments:
-                print(f"🗣️ 원문 text       : {seg.get('text')}")
-                print(f"✂️ 편집 textEdited : {seg.get('textEdited')}")
-                print("------")
+                logger.debug("원문 text: %s", seg.get('text'))
+                logger.debug("편집 textEdited: %s", seg.get('textEdited'))
 
             full_text = " ".join(seg.get("text", "") for seg in segments)
             return full_text, data
         except Exception as e:
-            print(f"❌ 오류 발생: {e}")
+            logger.exception("Clova STT 오류 발생")
             return ""
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
 # app/api/routes/result.py
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,6 +9,8 @@ from app.repository.interview import InterviewSession, InterviewQuestion, Interv
 from app.services.user.dependencies import get_current_user
 from app.services.score.scoring import QuestionTypeWeights
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 @router.get("/result/full/latest")
@@ -15,8 +18,7 @@ def get_full_latest_result(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user)
 ):
-    print("=== /result/full/latest ===")
-    print("user_id:", user_id)
+    logger.debug("/result/full/latest user_id=%s", user_id)
     # 1. 가장 최근 세션 가져오기
     latest_session = (
         db.query(InterviewSession)
@@ -26,8 +28,7 @@ def get_full_latest_result(
     )
     if not latest_session:
         raise HTTPException(status_code=404, detail="latest_session 없음")
-    print("latest_session:", latest_session)
-    print("latest_session:", latest_session)
+    logger.debug("latest_session: %s", latest_session)
 
     # 2. 가장 마지막 질문 가져오기
     latest_question = (
@@ -38,7 +39,7 @@ def get_full_latest_result(
     )
     if not latest_question:
         raise HTTPException(status_code=404, detail="latest_question 질문 없음")
-    print("latest_question:", latest_question)
+    logger.debug("latest_question: %s", latest_question)
 
     # 3. 해당 질문의 답변 가져오기
     latest_answer = (

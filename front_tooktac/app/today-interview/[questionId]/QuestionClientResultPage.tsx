@@ -275,7 +275,6 @@ export default function QuestionClientResultPage({ result, nextLink }: Props ) {
         '최종 평가'
     ];
     useEffect(() => {
-        console.log("최종 평가 결과:", result);
     }, []);
     return (
         <div className="min-h-screen bg-[#e7f8ff]">

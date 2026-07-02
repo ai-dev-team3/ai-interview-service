@@ -51,8 +51,8 @@ export default function QuestionClientPage({ questionId }: Props) {
   useSttSocket({
     isAnswerActive,
     questionId,
-    onTranscriptUpdate: (text) => console.log('📝 음성 텍스트:', text),
-    onFeedbackUpdate: (feedback) => console.log('🧠 피드백:', feedback)
+    onTranscriptUpdate: () => {},
+    onFeedbackUpdate: () => {}
   });
 
   useExpressionSocket({

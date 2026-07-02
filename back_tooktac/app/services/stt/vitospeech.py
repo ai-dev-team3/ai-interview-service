@@ -1,5 +1,9 @@
+import logging
 import os
 import sys
+
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
@@ -71,7 +75,7 @@ class VitoSpeechClient:
         response.raise_for_status()
 
         result = response.json()
-        print("📤 전송 결과:", result)
+        logger.debug("전송 결과: %s", result)
         return result["id"]
 
     def get_transcription_result(self, transcribe_id: str) -> dict:
@@ -89,7 +93,7 @@ class VitoSpeechClient:
         response.raise_for_status()
 
         result = response.json()
-        print("📥 전사 결과:", result)
+        logger.debug("전사 결과: %s", result)
         return result
 
     def get_full_text_from_file(self, file_path: str, retry: int = 10, delay: int = 3) -> str:
@@ -107,7 +111,7 @@ class VitoSpeechClient:
         for i in range(retry):
             result = self.get_transcription_result(transcribe_id)
             status = result.get("status")
-            print(f"⌛️ 현재 상태: {status}")
+            logger.debug("현재 상태: %s", status)
 
             if status == "completed":
                 # 3. 결과가 있으면 utterances 리스트에서 msg만 추출
@@ -118,7 +122,7 @@ class VitoSpeechClient:
 
             time.sleep(delay)
 
-        print("❌ 전사 완료되지 않음. 나중에 다시 시도하세요.")
+        logger.warning("전사 완료되지 않음. 나중에 다시 시도하세요.")
         return ""
 
 if __name__ == "__main__":

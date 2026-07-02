@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-import os
+from app.config import JWT_SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")
+SECRET_KEY = JWT_SECRET_KEY
 ALGORITHM = "HS256"
 
-def create_access_token(user_id: int, expires_delta: timedelta = timedelta(hours=12)) -> str:
+def create_access_token(user_id: int, expires_delta: timedelta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)) -> str:
     payload = {
         "sub": str(user_id),
         "exp": datetime.now(timezone.utc) + expires_delta

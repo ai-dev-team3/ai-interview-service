@@ -12,12 +12,19 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
 
+# --- 인증 관련 ---
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+# JWT 만료와 쿠키 max_age가 함께 쓰는 단일 기준값 (기존 쿠키 수명 2시간 유지)
+ACCESS_TOKEN_EXPIRE_MINUTES = 120
+
 
 def validate_settings() -> None:
     """필수 환경변수가 비어있으면 앱 시작 시점에 바로 에러를 내고 싶을 때 사용."""
     missing = []
     if not GEMINI_API_KEY:
         missing.append("GEMINI_API_KEY")
+    if not JWT_SECRET_KEY:
+        missing.append("JWT_SECRET_KEY")
 
     if missing:
         raise RuntimeError(

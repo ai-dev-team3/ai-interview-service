@@ -258,7 +258,6 @@ export default function TrainingHistory() {
       }
     })();
   }, []);
-  console.log(targetScore)
 
   // 3) 마운트 시 불러오기
   useEffect(() => {
@@ -705,10 +704,6 @@ export default function TrainingHistory() {
     const lastLabel = dayIndexByDate[last.fullDate]
       ? `${dayIndexByDate[last.fullDate]}일차`
       : `${weeklyData.length}일차`;
-    console.log(firstLabel)
-    console.log(lastLabel)
-    console.log(first)
-    console.log(last)
 
     // 4) 데이터셋 구성: 최소 1개, 2일 이상이면 마지막 기록용 데이터셋을 추가
     const datasets: ChartData<'radar'>['datasets'] = [
@@ -736,7 +731,6 @@ export default function TrainingHistory() {
         pointBorderWidth: 3
       });
     }
-    console.log(datasets)
     const data: ChartData<'radar'> = {
       labels: ['답변내용', '음성', '영상', '감정'],
       datasets

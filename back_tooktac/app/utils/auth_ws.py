@@ -1,8 +1,11 @@
 # app/utils/auth_ws.py
+import logging
+
 from fastapi import WebSocket, status, WebSocketException
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, SECRET_KEY
 from jose import ExpiredSignatureError, JWTError, jwt
-import os
+
+logger = logging.getLogger(__name__)
 
 # async def get_user_id_from_websocket(websocket: WebSocket) -> int:
 #     # 1. 쿠키에서 access_token 추출
@@ -33,16 +36,15 @@ import os
 #         )
 
 
-# app/utils/auth_ws.py
-
-SECRET = os.getenv("JWT_SECRET_KEY", "your-secret-key")
+# 시크릿은 core.security와 단일 소스 공유 (fallback 금지)
+SECRET = SECRET_KEY
 ALGS = ["HS256"]
 
 async def get_user_id_from_websocket(ws: WebSocket) -> int:
     # 0) 진단 로그
-    print("[AUTH_WS] cookies =", dict(ws.cookies))
-    print("[AUTH_WS] headers.authorization =", ws.headers.get("authorization"))
-    print("[AUTH_WS] query_params =", dict(ws.query_params))
+    logger.debug("[AUTH_WS] cookies = %s", dict(ws.cookies))
+    logger.debug("[AUTH_WS] headers.authorization = %s", ws.headers.get("authorization"))
+    logger.debug("[AUTH_WS] query_params = %s", dict(ws.query_params))
 
     # 1) 쿠키 우선
     token = ws.cookies.get("access_token")

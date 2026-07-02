@@ -5,6 +5,7 @@ from app.services.feedback.speechfeedback import SpeechFeedbackGenerator
 from app.services.speech.speech_analyzer import SpeechAnalyzer
 from app.services.stt.stt_service import STTService
 from app.utils.auth_ws import get_user_id_from_websocket
+import logging
 import tempfile
 import os
 import asyncio
@@ -13,6 +14,8 @@ import threading
 from app.repository.database import SessionLocal
 from app.services.text.orchestrator import EvaluationOrchestrator
 from app.repository.analysis import EvaluationResult
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -100,7 +103,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # 8) ffmpeg 변환
         cmd = ["ffmpeg", "-i", webm_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path, "-y", "-loglevel", "error"]
-        proc = subprocess.run(cmd, capture_output=True)
+        # 동기 호출을 그대로 두면 이벤트 루프가 멈춰 다른 요청/웹소켓이 전부 대기함 → 워커 스레드로 위임
+        proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
         if proc.returncode != 0:
             _save_minimal_result(db, user_id, session.id, question, reason="ffmpeg 변환 실패")
             await websocket.send_json({"transcript": "", "feedback": _empty_feedback("ffmpeg 변환 실패")})
@@ -108,7 +112,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # 9) STT (Clova)
         clova = STTService(stt_type="clova")
-        clova_text, clova_raw = clova.transcribe(wav_path)
+        clova_text, clova_raw = await asyncio.to_thread(clova.transcribe, wav_path)
         text_clean = (clova_text or "").strip()
 
         if text_clean == "":
@@ -121,22 +125,21 @@ async def websocket_endpoint(websocket: WebSocket):
         _save_answer(db, session.id, question, user_id, text_clean)
 
         vito = STTService(stt_type="vito")
-        vito_text, _ = vito.transcribe(wav_path)
+        vito_text, _ = await asyncio.to_thread(vito.transcribe, wav_path)
 
         analyzer = SpeechAnalyzer(clova_raw)
         speed = analyzer.speech_speed_calculate()
-        pitch = analyzer.calculate_pitch_variation(wav_path)
+        # librosa pitch 분석은 CPU 연산이 큼 → 워커 스레드로 위임
+        pitch = await asyncio.to_thread(analyzer.calculate_pitch_variation, wav_path)
         fillers = analyzer.find_filler_words(vito_text)
 
         sf = SpeechFeedbackGenerator(speed, pitch, fillers).generate_feedback()
         labels = sf.get("labels", {}) or {}
         score_detail = sf.get("score_detail", {}) or {}
         total_score = sf.get("total_score", 0) or 0
-        print("=========================================================================================================")
-        print("Clova STT 변환 텍스트:", clova_text)
-        print("클린 텍스트:", text_clean)
-        print("Vito STT 변환 텍스트:", vito_text)
-        print("=========================================================================================================")
+        logger.debug("Clova STT 변환 텍스트: %s", clova_text)
+        logger.debug("클린 텍스트: %s", text_clean)
+        logger.debug("Vito STT 변환 텍스트: %s", vito_text)
 
         # 11) 텍스트 평가 (LLM)
         try:
@@ -144,7 +147,10 @@ async def websocket_endpoint(websocket: WebSocket):
             # ev = orchestrator.evaluate_answer(question.question_text, text_clean, question.question_type)
             # 변경:
             orchestrator = get_orchestrator_singleton()
-            ev = orchestrator.evaluate_answer(question.question_text, text_clean, question.question_type)
+            ev = await asyncio.to_thread(
+                orchestrator.evaluate_answer,
+                question.question_text, text_clean, question.question_type
+            )
         except Exception:
             _save_minimal_result(
                 db, user_id, session.id, question,
@@ -182,12 +188,9 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({"transcript": text_clean, "feedback": sf})
 
     except WebSocketDisconnect:
-        print("WebSocket disconnected")
+        logger.info("WebSocket disconnected")
     except Exception as e:
-        print("=========================================================================================================")
-        print("에러발생")
-        print(e)
-        print("=========================================================================================================")
+        logger.exception("음성 답변 처리 중 오류 발생")
         if db is not None:
             db.rollback()
         try:

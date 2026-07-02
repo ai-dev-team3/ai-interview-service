@@ -1,9 +1,12 @@
+import logging
 import requests
 import json
 import time
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 class JwtTokenManager:
     def __init__(self, output_path=None):
@@ -26,7 +29,7 @@ class JwtTokenManager:
             "client_secret": self.client_secret
         }
         headers={"Accept": "application/json"}
-        print("🔐 JWT 토큰 요청 중...")
+        logger.info("JWT 토큰 요청 중...")
         response = requests.post(self.auth_url, data=payload, headers=headers)
         response.raise_for_status()
 
@@ -40,7 +43,7 @@ class JwtTokenManager:
         """토큰 정보를 JSON 파일로 저장"""
         with open(self.output_path, "w", encoding="utf-8") as f:
             json.dump(token_data, f, indent=2, ensure_ascii=False)
-        print(f"✅ 토큰 저장 완료: {self.output_path}")
+        logger.info("토큰 저장 완료: %s", self.output_path)
 
     def load_token(self) -> dict:
         """저장된 토큰 파일 로드 (없으면 None)"""
@@ -60,11 +63,11 @@ class JwtTokenManager:
         current_token = self.load_token()
 
         if current_token is None or self.is_token_expired(current_token):
-            print("🔄 토큰이 만료되었거나 존재하지 않음. 새로 발급합니다.")
+            logger.info("토큰이 만료되었거나 존재하지 않음. 새로 발급합니다.")
             new_token = self.fetch_token()
             self.save_token(new_token)
         else:
-            print("🟢 현재 토큰은 유효합니다.")
+            logger.info("현재 토큰은 유효합니다.")
 
 
 if __name__ == "__main__":

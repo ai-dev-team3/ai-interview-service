@@ -8,51 +8,43 @@ dependencies = [
     "uvicorn[standard]>=0.35.0",
     "python-multipart>=0.0.20",
     "itsdangerous>=2.2.0",
-
     # Database
     "sqlalchemy>=2.0.42",
     "pymysql>=1.1.1",
-
     # Auth
     "python-jose[cryptography]>=3.5.0",
     "python-dotenv>=1.1.1",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "email-validator>=2.2.0",
-
     # AI - OpenAI
     "openai>=1.98.0",
-
     # AI - Google
     "google-genai>=1.0.0",
-
     # AI - Vision
     "mediapipe>=0.10.9,<0.10.20",
     "opencv-contrib-python>=4.12.0.88",
     "ultralytics>=8.3.174",
-
     # AI - NLP
     "sentence-transformers>=5.0.0",
     "transformers>=4.54.1",
     "torch>=2.7.1",
     "torchvision>=0.22.1",
-
     # Audio
     "librosa>=0.11.0",
     "sounddevice>=0.5.2",
     "soundfile>=0.13.1",
     "numba>=0.61.0",
     "llvmlite>=0.44.0",
-
     # Data
     "numpy>=2.2.6",
     "pandas>=2.3.1",
     "scikit-learn>=1.7.1",
     "pillow>=11.3.0",
-
     # HTTP
     "requests>=2.32.4",
     "httpx>=0.28.1",
+    "alembic>=1.18.5",
 ]
 
 [tool.uv]
