@@ -79,12 +79,13 @@ def test_app(db_session):
     from app.api.interview import router as interview_router
     from app.api.report import router as report_router
     from app.api.result import router as result_router
+    from app.api.resume import router as resume_router
     from app.api.signup import router as signup_router
     from app.api.training_page import router as training_page_router
     from app.api.user import router as user_router
 
     app = FastAPI()
-    for router in (signup_router, user_router, interview_router,
+    for router in (signup_router, user_router, resume_router, interview_router,
                    result_router, report_router, training_page_router):
         app.include_router(router)
 

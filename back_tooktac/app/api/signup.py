@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Form, Depends
 from sqlalchemy.orm import Session
 from app.repository.database import get_db
-from app.services.user.signup_service import register_user_with_resume
+from app.services.user.signup_service import register_user
 
 router = APIRouter()
 
@@ -16,10 +16,9 @@ async def signup(
     email: str = Form(...),
     birthdate: str = Form(...),
     desiredJob: str = Form(...),
-    resume_text: str = Form(None),
     db: Session = Depends(get_db)
 ):
-    user = register_user_with_resume(
+    user = register_user(
         db=db,
         username=username,
         password=password,
@@ -28,7 +27,6 @@ async def signup(
         email=email,
         birthdate=birthdate,
         desired_job=desiredJob,
-        resume_text=resume_text,
     )
 
     return {"message": f"{username}님 가입 완료!", "user_id": user.id}
