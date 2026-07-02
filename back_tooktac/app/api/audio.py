@@ -100,7 +100,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # 8) ffmpeg 변환
         cmd = ["ffmpeg", "-i", webm_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path, "-y", "-loglevel", "error"]
-        proc = subprocess.run(cmd, capture_output=True)
+        # 동기 호출을 그대로 두면 이벤트 루프가 멈춰 다른 요청/웹소켓이 전부 대기함 → 워커 스레드로 위임
+        proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
         if proc.returncode != 0:
             _save_minimal_result(db, user_id, session.id, question, reason="ffmpeg 변환 실패")
             await websocket.send_json({"transcript": "", "feedback": _empty_feedback("ffmpeg 변환 실패")})
@@ -108,7 +109,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # 9) STT (Clova)
         clova = STTService(stt_type="clova")
-        clova_text, clova_raw = clova.transcribe(wav_path)
+        clova_text, clova_raw = await asyncio.to_thread(clova.transcribe, wav_path)
         text_clean = (clova_text or "").strip()
 
         if text_clean == "":
@@ -121,11 +122,12 @@ async def websocket_endpoint(websocket: WebSocket):
         _save_answer(db, session.id, question, user_id, text_clean)
 
         vito = STTService(stt_type="vito")
-        vito_text, _ = vito.transcribe(wav_path)
+        vito_text, _ = await asyncio.to_thread(vito.transcribe, wav_path)
 
         analyzer = SpeechAnalyzer(clova_raw)
         speed = analyzer.speech_speed_calculate()
-        pitch = analyzer.calculate_pitch_variation(wav_path)
+        # librosa pitch 분석은 CPU 연산이 큼 → 워커 스레드로 위임
+        pitch = await asyncio.to_thread(analyzer.calculate_pitch_variation, wav_path)
         fillers = analyzer.find_filler_words(vito_text)
 
         sf = SpeechFeedbackGenerator(speed, pitch, fillers).generate_feedback()
@@ -144,7 +146,10 @@ async def websocket_endpoint(websocket: WebSocket):
             # ev = orchestrator.evaluate_answer(question.question_text, text_clean, question.question_type)
             # 변경:
             orchestrator = get_orchestrator_singleton()
-            ev = orchestrator.evaluate_answer(question.question_text, text_clean, question.question_type)
+            ev = await asyncio.to_thread(
+                orchestrator.evaluate_answer,
+                question.question_text, text_clean, question.question_type
+            )
         except Exception:
             _save_minimal_result(
                 db, user_id, session.id, question,

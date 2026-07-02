@@ -1,4 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect  # 라우터/웹소켓 임포트
+import asyncio
 import os
 from sqlalchemy.orm import Session  # DB 세션 타입 힌트
 from app.services.vision.posture_analyzer import PostureAnalyzer, PostureCoreModel, PostureSessionState  # 포즈 분석기 구성요소
@@ -52,13 +53,15 @@ async def expression_socket(websocket: WebSocket):
                 continue  # 다음 루프로 진행
 
             try:
-                result = analyzer.analyze_frame(frame, posture_state)  # 포즈 분석 수행(상태 누적)
+                # MediaPipe 추론은 동기 CPU 연산 → 이벤트 루프가 멈추지 않도록 워커 스레드로 위임
+                result = await asyncio.to_thread(analyzer.analyze_frame, frame, posture_state)  # 포즈 분석 수행(상태 누적)
             except Exception as e:
                 await websocket.send_json({"expression": "프레임 분석 실패"})  # 포즈 분석 에러 통지
                 continue  # 다음 프레임으로 진행
 
             try:
-                emotion_analyzer.analyze_frame(frame, emotion_state)  # 감정 분석 수행(상태 누적)
+                # YOLO 추론도 동일하게 워커 스레드로 위임
+                await asyncio.to_thread(emotion_analyzer.analyze_frame, frame, emotion_state)  # 감정 분석 수행(상태 누적)
             except Exception:
                 pass  # 감정 분석 실패는 무시하고 진행
 

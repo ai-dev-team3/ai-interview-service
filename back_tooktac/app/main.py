@@ -4,6 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
+from app.config import validate_settings
+
+validate_settings()
+
 from app.api import audio_router
 from app.api import video_router
 from app.api import signup_router
@@ -17,8 +21,9 @@ import app.repository.model_registry
 
 app = FastAPI()
 
+# 주의: CORS origin은 스킴+호스트(+포트)까지만 유효. path(/api 등)가 붙으면 매칭되지 않음
 origins = [
-    "http://localhost:3000",  # 개발 환경
+    "http://localhost:3000",   # 개발 환경
     "http://127.0.0.1:3000",   # 개발 환경 (IP 직접접속)
     "https://tooktac.shop",    # 운영 환경
     "https://www.tooktac.shop",
@@ -26,10 +31,7 @@ origins = [
     "http://www.tooktac.shop:18080",
     "https://tooktac.shop:18080",
     "https://www.tooktac.shop:18080",
-    "https://tooktac.shop:18080/api",
-    "https://www.tooktac.shop:18080/api",
-    "http://localhost:3000"
-    ]
+]
 
 # ✅ CORS 설정 추가
 app.add_middleware(
