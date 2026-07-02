@@ -6,19 +6,11 @@ from app.services.emotion.emotion_analyzer import EmotionAnalyzer, EmotionCoreMo
 from app.utils.auth_ws import get_user_id_from_websocket  # WebSocket에서 사용자 인증 정보 추출
 from app.repository.analysis import VideoEvaluationResult  # 결과 저장용 ORM 모델
 from app.repository.interview import InterviewQuestion, InterviewSession  # 세션/질문 ORM
-from app.repository.database import SessionLocal  # DB 세션 팩토리
+from app.repository.database import get_db  # DB 세션 팩토리
 import numpy as np  # 바이트→배열 변환
 import cv2  # 이미지 디코딩
 
 router = APIRouter()  # FastAPI 라우터 생성
-
-def get_db():
-    # 의존성 주입 스타일의 DB 세션 생성기
-    db = SessionLocal()  # 세션 팩토리 호출
-    try:
-        yield db  # 호출자에게 세션 제공
-    finally:
-        db.close()  # 사용 종료 시 닫기
 
 # 무거운 모델은 프로세스당 1회 로드
 GLOBAL_POSTURE_CORE = PostureCoreModel()  # MediaPipe 코어 로드

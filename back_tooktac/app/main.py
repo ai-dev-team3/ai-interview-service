@@ -1,5 +1,10 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI
-from app.api import audio_router 
+from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
+
+from app.api import audio_router
 from app.api import video_router
 from app.api import signup_router
 from app.api import user_router
@@ -7,7 +12,6 @@ from app.api import interview_router
 from app.api import result_router
 from app.api import report_router
 from app.api import training_page_router
-from fastapi.middleware.cors import CORSMiddleware
 import app.repository.model_registry
 
 
