@@ -1,4 +1,6 @@
 # app/api/routes/interview.py
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.services.text.make_question import InterviewQuestionGenerator
@@ -6,24 +8,23 @@ from app.repository.interview import InterviewSession, InterviewQuestion
 from app.repository.database import get_db
 from app.services.user.dependencies import get_current_user
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 @router.post("/start-interview")
 def start_interview(db: Session = Depends(get_db), user_id=Depends(get_current_user)):
-    print("질문 생성 시작")
+    logger.info("질문 생성 시작 (user_id=%s)", user_id)
     # 인터뷰 세션 생성
     session = InterviewSession(user_id=user_id)
     db.add(session)
     db.flush()  # session.id 사용 가능
 
     # 질문 생성기
-    print("질문 생성 ")
     generator = InterviewQuestionGenerator()
     parsed = generator.load_structured_from_db(db, user_id)
     q1 = generator.generate_conceptual_question(parsed)
-    print("질문 생성 완료")
-    print("-" * 50)
-    print(q1)
+    logger.info("질문 생성 완료: %s", q1)
     # DB 저장
     db.add(InterviewQuestion(
         session_id=session.id,

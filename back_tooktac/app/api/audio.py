@@ -5,6 +5,7 @@ from app.services.feedback.speechfeedback import SpeechFeedbackGenerator
 from app.services.speech.speech_analyzer import SpeechAnalyzer
 from app.services.stt.stt_service import STTService
 from app.utils.auth_ws import get_user_id_from_websocket
+import logging
 import tempfile
 import os
 import asyncio
@@ -13,6 +14,8 @@ import threading
 from app.repository.database import SessionLocal
 from app.services.text.orchestrator import EvaluationOrchestrator
 from app.repository.analysis import EvaluationResult
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -134,11 +137,9 @@ async def websocket_endpoint(websocket: WebSocket):
         labels = sf.get("labels", {}) or {}
         score_detail = sf.get("score_detail", {}) or {}
         total_score = sf.get("total_score", 0) or 0
-        print("=========================================================================================================")
-        print("Clova STT 변환 텍스트:", clova_text)
-        print("클린 텍스트:", text_clean)
-        print("Vito STT 변환 텍스트:", vito_text)
-        print("=========================================================================================================")
+        logger.debug("Clova STT 변환 텍스트: %s", clova_text)
+        logger.debug("클린 텍스트: %s", text_clean)
+        logger.debug("Vito STT 변환 텍스트: %s", vito_text)
 
         # 11) 텍스트 평가 (LLM)
         try:
@@ -187,12 +188,9 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({"transcript": text_clean, "feedback": sf})
 
     except WebSocketDisconnect:
-        print("WebSocket disconnected")
+        logger.info("WebSocket disconnected")
     except Exception as e:
-        print("=========================================================================================================")
-        print("에러발생")
-        print(e)
-        print("=========================================================================================================")
+        logger.exception("음성 답변 처리 중 오류 발생")
         if db is not None:
             db.rollback()
         try:

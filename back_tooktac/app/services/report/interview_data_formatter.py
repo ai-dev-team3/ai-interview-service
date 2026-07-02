@@ -1,3 +1,4 @@
+import logging
 # app/services/report/interview_data_formatter.py
 from collections import defaultdict
 from sqlalchemy.orm import Session
@@ -6,6 +7,9 @@ from app.repository.analysis import EvaluationResult, VideoEvaluationResult
 from app.services.score.scoring import QuestionTypeWeights
 from sqlalchemy.inspection import inspect
 import json
+
+
+logger = logging.getLogger(__name__)
 
 def calculate_final_score(text_result: EvaluationResult, video_result: VideoEvaluationResult, question_type: str) -> int:
     """
@@ -104,23 +108,15 @@ def generate_interview_json_from_session(db: Session, session_id: int) -> dict:
         question_id = q.id
         order = q.question_order
 
-        print("=" * 20)
-        print("questionId : ", question_id)
-        print("questionOrder : ", order)
-        print("=" * 20)
+        logger.debug("questionId=%s questionOrder=%s", question_id, order)
 
         answer = db.query(InterviewAnswer).filter_by(question_id=question_id).first()
         text_result = db.query(EvaluationResult).filter_by(question_id=question_id).first()
         video_result = db.query(VideoEvaluationResult).filter_by(question_id=question_id).first()
 
-        print("=" * 20)
-        print("[DEBUG] Answer dict:")
-        print(json.dumps(truncate_values(sa_to_dict(answer)), ensure_ascii=False, indent=2, default=str))
-        print("[DEBUG] TextResult dict:")
-        print(json.dumps(truncate_values(sa_to_dict(text_result)), ensure_ascii=False, indent=2, default=str))
-        print("[DEBUG] VideoResult dict:")
-        print(json.dumps(truncate_values(sa_to_dict(video_result)), ensure_ascii=False, indent=2, default=str))
-        print("=" * 20)
+        logger.debug("Answer dict: %s", json.dumps(truncate_values(sa_to_dict(answer)), ensure_ascii=False, default=str))
+        logger.debug("TextResult dict: %s", json.dumps(truncate_values(sa_to_dict(text_result)), ensure_ascii=False, default=str))
+        logger.debug("VideoResult dict: %s", json.dumps(truncate_values(sa_to_dict(video_result)), ensure_ascii=False, default=str))
 
         # if not all([answer, text_result, video_result]):
         #     raise ValueError(f"{order}번 질문의 분석 데이터가 부족합니다")
