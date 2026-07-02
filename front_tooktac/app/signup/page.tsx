@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { signup, checkUsername } from '@/api/api';
 import { useRouter } from 'next/navigation';
-import ResumeUploader from '@/components/ResumeUploader';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -20,7 +19,6 @@ export default function SignupPage() {
     birthdate: '',
     desiredJob: '',
   });
-  const [extractedResumeText, setExtractedResumeText] = useState('');
 
   // 2) 중복 상태 제거: showPassword, showConfirmPassword, usernameStatus만 유지
   const [showPassword, setShowPassword] = useState(false);
@@ -79,7 +77,6 @@ export default function SignupPage() {
     form.append('email', formData.email);
     form.append('birthdate', formData.birthdate);
     form.append('desiredJob', formData.desiredJob);
-    if (extractedResumeText) form.append('resume_text', extractedResumeText);
 
     try {
       const result = await signup(form);
@@ -265,12 +262,6 @@ export default function SignupPage() {
                 <i className="ri-arrow-down-s-line text-gray-400"></i>
                 </div>
                 </div>
-              </div>
-
-              {/* 이력서 업로드 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">이력서 업로드</label>
-                <ResumeUploader onExtracted={(text: string) => setExtractedResumeText(text)} />
               </div>
 
               <button

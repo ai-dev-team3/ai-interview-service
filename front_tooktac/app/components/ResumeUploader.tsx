@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { extractTextFromPDF, PageResult } from '@/lib/pdfExtractor';
 
 interface Props {
-  onExtracted: (text: string) => void;
+  onExtracted: (text: string, fileName?: string) => void;
 }
 
 type ExtractionStatus = 'idle' | 'extracting' | 'review' | 'done';
@@ -65,7 +65,7 @@ export default function ResumeUploader({ onExtracted }: Props) {
       .map((p) => editedTexts[p.pageNumber] ?? '')
       .filter(Boolean)
       .join('\n\n');
-    onExtracted(fullText);
+    onExtracted(fullText, fileName);
     setStatus('done');
   };
 

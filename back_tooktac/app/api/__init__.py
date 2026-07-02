@@ -12,6 +12,7 @@ _ROUTER_MODULES = {
     "video_router": ".video",
     "signup_router": ".signup",
     "user_router": ".user",
+    "resume_router": ".resume",
     "interview_router": ".interview",
     "result_router": ".result",
     "report_router": ".report",

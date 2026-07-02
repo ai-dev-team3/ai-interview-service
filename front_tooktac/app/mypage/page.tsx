@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import api from '@/api/api';
-import { useState, useEffect, useMemo } from 'react';
+import api, { uploadResume, getResumeStatus } from '@/api/api';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import ResumeUploader from '@/components/ResumeUploader';
 
 type DayCounters = {
   programDayToday: number;
@@ -37,6 +38,54 @@ export default function MyPage() {
 
   // 예시 면접 예정일(필요 시 서버 값으로 교체)
   const [interviewDate] = useState<Date | null>(new Date(2025, 9, 12)); // 2025-08-13
+
+  // 이력서 등록 상태
+  const [hasResume, setHasResume] = useState<boolean | null>(null);
+  const [resumeSaving, setResumeSaving] = useState(false);
+  const [toast, setToast] = useState('');
+  const resumeSectionRef = useRef<HTMLDivElement>(null);
+
+  // 이력서 등록 여부 로드
+  useEffect(() => {
+    const loadResumeStatus = async () => {
+      try {
+        const d = await getResumeStatus();
+        setHasResume(d.has_resume);
+      } catch {
+        setHasResume(null);
+      }
+    };
+    loadResumeStatus();
+  }, []);
+
+  // 가드 리다이렉트(?resume=required)로 진입한 경우 안내 + 이력서 섹션으로 스크롤
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('resume') === 'required') {
+      setToast('이력서를 먼저 등록해야 면접을 시작할 수 있습니다.');
+      setTimeout(() => resumeSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  }, []);
+
+  // 토스트 자동 닫힘
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const handleResumeExtracted = async (text: string, fileName?: string) => {
+    setResumeSaving(true);
+    try {
+      await uploadResume(text, fileName);
+      setHasResume(true);
+      setToast('이력서가 등록되었습니다.');
+    } catch {
+      setToast('이력서 등록에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setResumeSaving(false);
+    }
+  };
 
   // 달 이동
   const goPrevMonth = () => {
@@ -127,6 +176,13 @@ export default function MyPage() {
 
   return (
     <div className="min-h-screen bg-[#e7f8ff]">
+      {/* 안내 토스트 */}
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#27386d] text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium">
+          {toast}
+        </div>
+      )}
+
       {/* 상단 네비 */}
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-4xl mx-auto px-4">
@@ -152,6 +208,30 @@ export default function MyPage() {
         </div>
 
         <div className="grid gap-6 mb-8">
+          {/* 이력서 관리 */}
+          <div ref={resumeSectionRef} className="bg-white rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-[#27386d]">이력서 관리</h2>
+              {hasResume !== null && (
+                <span
+                  className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    hasResume ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {hasResume ? '등록됨' : '미등록'}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              이력서를 등록하면 이력서·자기소개서 기반 맞춤 면접 질문이 생성됩니다.
+              {hasResume ? ' 새 파일을 업로드하면 기존 이력서를 대체합니다.' : ''}
+            </p>
+            <ResumeUploader onExtracted={handleResumeExtracted} />
+            {resumeSaving && (
+              <p className="mt-2 text-sm text-gray-500 text-center">저장 중...</p>
+            )}
+          </div>
+
           {/* 다음 면접 예정일 */}
           <div className="bg-white rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">

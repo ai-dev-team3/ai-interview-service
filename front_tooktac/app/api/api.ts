@@ -47,6 +47,21 @@ export const checkAuth = async () => {
   return response.data;
 };
 
+// 이력서 등록/갱신 (클라이언트에서 추출한 텍스트 전송)
+export const uploadResume = async (resumeText: string, filename?: string) => {
+  const form = new FormData();
+  form.append('resume_text', resumeText);
+  if (filename) form.append('filename', filename);
+  const response = await api.post('/resume', form);
+  return response.data; // { message, resume_id }
+};
+
+// 이력서 등록 여부 조회
+export const getResumeStatus = async (): Promise<{ has_resume: boolean }> => {
+  const response = await api.get('/resume/status');
+  return response.data;
+};
+
 export const startInterview = async () => {
   const response = await api.post("/start-interview");
   return response.data;

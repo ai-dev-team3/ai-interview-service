@@ -10,23 +10,18 @@ def _signup_form(username="newuser"):
         "email": f"{username}@example.com",
         "birthdate": "1999-12-31",
         "desiredJob": "프론트엔드 개발자",
-        "resume_text": "저는 열정적인 개발자입니다.",
     }
 
 
-def test_signup_creates_user_and_resume(client, db_session):
+def test_signup_creates_user(client, db_session):
     res = client.post("/signup", data=_signup_form())
     assert res.status_code == 200
     assert "user_id" in res.json()
 
-    from app.repository.resume import Resume
     from app.repository.user import User
 
     user = db_session.query(User).filter_by(username="newuser").first()
     assert user is not None
-    resume = db_session.query(Resume).filter_by(user_id=user.id).first()
-    assert resume is not None
-    assert resume.content == "저는 열정적인 개발자입니다."
 
 
 def test_check_username_availability(client, test_user):

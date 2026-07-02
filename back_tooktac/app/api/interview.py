@@ -22,7 +22,10 @@ def start_interview(db: Session = Depends(get_db), user_id=Depends(get_current_u
 
     # 질문 생성기
     generator = InterviewQuestionGenerator()
-    parsed = generator.load_structured_from_db(db, user_id)
+    try:
+        parsed = generator.load_structured_from_db(db, user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="이력서를 먼저 등록해주세요.")
     q1 = generator.generate_conceptual_question(parsed)
     logger.info("질문 생성 완료: %s", q1)
     # DB 저장
@@ -65,7 +68,10 @@ def generate_next_question(order: int, db: Session = Depends(get_db), user_id=De
         raise HTTPException(status_code=404, detail="세션 없음")
 
     generator = InterviewQuestionGenerator()
-    parsed = generator.load_structured_from_db(db, user_id)
+    try:
+        parsed = generator.load_structured_from_db(db, user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="이력서를 먼저 등록해주세요.")
 
     # ✅ 질문 생성
     if order == 2:
