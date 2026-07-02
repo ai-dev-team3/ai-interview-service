@@ -1,10 +1,8 @@
 import requests
 import json
-from dotenv import load_dotenv
 import os
 
 class ClovaSpeechClient:
-    load_dotenv()
     # Clova Speech invoke URL (앱 등록 시 발급받은 Invoke URL)
     invoke_url = os.getenv("CLOVA_SPEECH_API_URL")
     # Clova Speech secret key (앱 등록 시 발급받은 Secret Key)

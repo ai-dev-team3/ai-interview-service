@@ -2,20 +2,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.repository.database import SessionLocal
+from app.repository.database import get_db
 from app.repository.analysis import EvaluationResult, VideoEvaluationResult
 from app.repository.interview import InterviewSession, InterviewQuestion, InterviewAnswer
 from app.services.user.dependencies import get_current_user
 from app.services.score.scoring import QuestionTypeWeights
 
 router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/result/full/latest")
 def get_full_latest_result(

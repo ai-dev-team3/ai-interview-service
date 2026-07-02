@@ -2,17 +2,10 @@
 
 from fastapi import APIRouter, Form, Depends
 from sqlalchemy.orm import Session
-from app.repository.database import SessionLocal
+from app.repository.database import get_db
 from app.services.user.signup_service import register_user_with_resume
 
 router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/signup")
 async def signup(
