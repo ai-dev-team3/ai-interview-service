@@ -1,18 +1,11 @@
 from fastapi import APIRouter, Form, Depends, HTTPException, Response, Query, Request
 from sqlalchemy.orm import Session
-from app.repository.database import SessionLocal
+from app.repository.database import get_db
 from app.services.user.login_service import authenticate_user
 from app.services.user.dependencies import get_current_user
 from app.repository.user import User
 
 router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/login")
 def login(

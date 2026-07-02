@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, date
 import json
 from typing import List, Dict
 
-from app.repository.database import SessionLocal
+from app.repository.database import get_db
 from app.services.user.dependencies import get_current_user
 from app.repository.user import User
 from app.repository.interview import InterviewSession, InterviewQuestion
@@ -18,13 +18,6 @@ from app.services.report.final_report_processor import FinalEvaluationGenerator
 from app.services.report.interview_data_formatter import generate_interview_json_from_session
 
 router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # -------------------------------------------------------------------
 # 기존의 최종 리포트 생성 API는 동일 (필요시 스키마 매핑 유지)

@@ -3,9 +3,6 @@ from fastapi import WebSocket, status, WebSocketException
 from app.core.security import decode_access_token
 from jose import ExpiredSignatureError, JWTError, jwt
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # async def get_user_id_from_websocket(websocket: WebSocket) -> int:
 #     # 1. 쿠키에서 access_token 추출

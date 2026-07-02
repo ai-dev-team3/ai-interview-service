@@ -3,17 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.services.text.make_question import InterviewQuestionGenerator
 from app.repository.interview import InterviewSession, InterviewQuestion
-from app.repository.database import SessionLocal
+from app.repository.database import get_db
 from app.services.user.dependencies import get_current_user
 
 router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/start-interview")
 def start_interview(db: Session = Depends(get_db), user_id=Depends(get_current_user)):

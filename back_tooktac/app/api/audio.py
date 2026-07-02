@@ -10,12 +10,9 @@ import os
 import asyncio
 import subprocess
 import threading
-from dotenv import load_dotenv
 from app.repository.database import SessionLocal
 from app.services.text.orchestrator import EvaluationOrchestrator
 from app.repository.analysis import EvaluationResult
-
-load_dotenv()
 
 router = APIRouter()
 

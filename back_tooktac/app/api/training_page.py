@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import Session
-from app.repository.database import SessionLocal
+from app.repository.database import get_db
 from app.repository.interview import InterviewSession
 from app.repository.user import User
 from app.repository.report import FinalReportSummary  # final_report_summary ORM 모델
@@ -11,13 +11,6 @@ from app.services.user.dependencies import get_current_user # 프로젝트에서
 
 
 router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # -----------------------------
 # 1) 모든 사용자: 일차별 평균 점수

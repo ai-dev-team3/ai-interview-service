@@ -3,12 +3,10 @@ import json
 import time
 import os
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from pathlib import Path
 
 class JwtTokenManager:
     def __init__(self, output_path=None):
-        load_dotenv()
         self.client_id = os.getenv("VITO_CLIENT_ID")
         self.client_secret = os.getenv("VITO_CLIENT_SECRET")
         self.client_id = os.getenv("VITO_CLIENT_ID")
