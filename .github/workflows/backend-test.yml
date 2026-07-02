@@ -1,0 +1,60 @@
+name: Backend Tests
+
+on:
+  pull_request:
+    paths:
+      - "back_tooktac/**"
+      - ".github/workflows/backend-test.yml"
+  push:
+    branches: [develop, main]
+    paths:
+      - "back_tooktac/**"
+      - ".github/workflows/backend-test.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: back_tooktac
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-test-pw
+          MYSQL_DATABASE: tooktac_test
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-test-pw"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_USER: root
+      DB_PASSWORD: ci-test-pw
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_NAME: tooktac
+      TEST_DB_NAME: tooktac_test
+      JWT_SECRET_KEY: ci-test-secret
+      # LLM 호출은 전부 모킹되므로 더미 값으로 충분
+      GEMINI_API_KEY: ci-dummy
+      OPENAI_API_KEY: ci-dummy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "back_tooktac/uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run tests
+        run: uv run pytest
