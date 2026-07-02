@@ -1,4 +1,4 @@
-import google.generativeai as genai
+from google import genai
 import json
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -9,9 +9,8 @@ class InterviewQuestionGenerator:
     """Gemini API를 사용한 면접 질문 생성 클래스"""
     
     def __init__(self):
-        genai.configure(api_key=GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        # self.storage_path = "parsed_documents/"
+        self.client = genai.Client(api_key=GEMINI_API_KEY)
+        self.model_name = GEMINI_MODEL_NAME
     
     # def load_parsed_data(self, doc_id: str) -> Dict[str, Any]:
     #     """저장된 파싱 데이터 불러오기"""
@@ -60,7 +59,7 @@ class InterviewQuestionGenerator:
         질문만 출력하세요:
         """
         
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
         return {
             "question": response.text.strip(),
             "question_type": "개념설명형"
@@ -94,7 +93,7 @@ class InterviewQuestionGenerator:
         질문만 출력하세요:
         """
         
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
         return {
             "question": response.text.strip(),
             "question_type": "기술형"
@@ -134,7 +133,7 @@ class InterviewQuestionGenerator:
         질문만 출력하세요:
         """
         
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
         return {
             "question": response.text.strip(),
             "question_type": "개념설명형"
@@ -167,7 +166,7 @@ class InterviewQuestionGenerator:
         질문만 출력하세요:
         """
         
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
         return {
             "question": response.text.strip(),
             "question_type": "상황형"
@@ -199,7 +198,7 @@ class InterviewQuestionGenerator:
         질문만 출력하세요:
         """
         
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
         return {
             "question": response.text.strip(),
             "question_type": "행동형"
@@ -240,7 +239,7 @@ class InterviewQuestionGenerator:
         질문만 출력하세요:
         """
         
-        response = self.model.generate_content(prompt)
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
         return {
             "question": response.text.strip(),
             "question_type": "상황형"

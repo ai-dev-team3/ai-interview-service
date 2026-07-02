@@ -1,11 +1,13 @@
 # %%
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 from typing import Dict, List, Union
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
 from app.config import GEMINI_API_KEY, GEMINI_MODEL_NAME
+
 
 # %%
 # data_parser
@@ -451,10 +453,10 @@ class ScoreAggregator:
 class GeminiAdvisor:
     """Gemini AI를 활용한 AI 조언 생성 클래스 - 병렬 처리 최적화"""
 
-    def __init__(self, model, generation_config, safety_settings):
-        self.model = model
+    def __init__(self, client, model_name, generation_config):
+        self.client = client
+        self.model_name = model_name
         self.generation_config = generation_config
-        self.safety_settings = safety_settings
 
     def generate_all_advice(
             self,
@@ -642,10 +644,10 @@ class GeminiAdvisor:
 
     def _call_gemini(self, prompt: str) -> str:
         try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config=self.generation_config,
-                safety_settings=self.safety_settings
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=self.generation_config
             )
 
             if not response.candidates:
@@ -768,33 +770,20 @@ class ReportBuilder:
 # 최종 보고서 생성 클래스
 class FinalEvaluationGenerator:
     def __init__(self):
-        genai.configure(api_key=GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(GEMINI_MODEL_NAME )
-        self.generation_config = genai.types.GenerationConfig(
+        self.client = genai.Client(api_key=GEMINI_API_KEY)
+        self.model_name = GEMINI_MODEL_NAME
+        self.generation_config = types.GenerateContentConfig(
             temperature=0.7,
             top_p=0.8,
             top_k=40,
             max_output_tokens=10000,
+            safety_settings=[
+                types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_ONLY_HIGH"),
+                types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_ONLY_HIGH"),
+                types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_ONLY_HIGH"),
+                types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_ONLY_HIGH"),
+            ],
         )
-
-        self.safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_ONLY_HIGH"
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH",
-                "threshold": "BLOCK_ONLY_HIGH"
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_ONLY_HIGH"
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_ONLY_HIGH"
-            }
-        ]
 
         self.step_names = [
             '아이스브레이킹', '질문 1', '질문 2', '질문 3',
@@ -808,7 +797,7 @@ class FinalEvaluationGenerator:
             aggregated_scores = score_aggregator.aggregate_all_scores(question_analyses)
 
             # 2. AI 조언 생성
-            gemini_advisor = GeminiAdvisor(self.model, self.generation_config, self.safety_settings)
+            gemini_advisor = GeminiAdvisor(self.client, self.model_name, self.generation_config)
             ai_advice = gemini_advisor.generate_all_advice(
                 question_analyses,
                 aggregated_scores,
