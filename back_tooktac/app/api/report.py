@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from datetime import datetime, timedelta, date
-import os
 import json
 from typing import List, Dict
 
@@ -84,7 +83,7 @@ def generate_final_report(
 
     parsed_data = generate_interview_json_from_session(db, session.id)
 
-    generator = FinalEvaluationGenerator(gemini_api_key=os.getenv("GOOGLE_API_KEY"))
+    generator = FinalEvaluationGenerator()
     report = generator.generate_final_report_from_json(parsed_data)
 
     # 기존 보고서 제거 후 갱신

@@ -5,8 +5,6 @@ from app.services.text.make_question import InterviewQuestionGenerator
 from app.repository.interview import InterviewSession, InterviewQuestion
 from app.repository.database import SessionLocal
 from app.services.user.dependencies import get_current_user
-import os
-from dotenv import load_dotenv
 
 router = APIRouter()
 
@@ -27,7 +25,7 @@ def start_interview(db: Session = Depends(get_db), user_id=Depends(get_current_u
 
     # 질문 생성기
     print("질문 생성 ")
-    generator = InterviewQuestionGenerator(os.getenv("GEMINI_API_KEY"))
+    generator = InterviewQuestionGenerator()
     parsed = generator.load_structured_from_db(db, user_id)
     q1 = generator.generate_conceptual_question(parsed)
     print("질문 생성 완료")
@@ -72,7 +70,7 @@ def generate_next_question(order: int, db: Session = Depends(get_db), user_id=De
     if not session:
         raise HTTPException(status_code=404, detail="세션 없음")
 
-    generator = InterviewQuestionGenerator(os.getenv("GEMINI_API_KEY"))
+    generator = InterviewQuestionGenerator()
     parsed = generator.load_structured_from_db(db, user_id)
 
     # ✅ 질문 생성

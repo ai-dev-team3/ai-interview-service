@@ -15,24 +15,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
 
-# --- Document AI (Google Cloud) 관련 ---
-PROJECT_ID = os.getenv("PROJECT_ID")
-LOCATION = os.getenv("LOCATION", "us")
-PROCESSOR_ID = os.getenv("PROCESSOR_ID")
-# GOOGLE_APPLICATION_CREDENTIALS는 google-cloud 라이브러리가
-# os.environ에서 자동으로 읽으므로, load_dotenv()만 호출되면
-# 별도 코드 없이도 인식됨 (.env에 경로만 잘 적혀 있으면 됨)
-
 
 def validate_settings() -> None:
     """필수 환경변수가 비어있으면 앱 시작 시점에 바로 에러를 내고 싶을 때 사용."""
     missing = []
     if not GEMINI_API_KEY:
         missing.append("GEMINI_API_KEY")
-    if not PROJECT_ID:
-        missing.append("PROJECT_ID")
-    if not PROCESSOR_ID:
-        missing.append("PROCESSOR_ID")
 
     if missing:
         raise RuntimeError(
