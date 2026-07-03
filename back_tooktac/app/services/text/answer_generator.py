@@ -1,21 +1,15 @@
-from openai import OpenAI
-from app.config import OPENAI_API_KEY
+from typing import Optional
 
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
 
+from app.services.llm import get_chat_model
 
-class ModelAnswerGenerator:
-
-    def __init__(self):
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
-
-    def generate_technical_answer(self, question: str) -> str:
-        system_msg = {
-            "role": "system",
-            "content": """당신은 10년 경력의 시니어 개발자이자 기술 면접관입니다. 
+_TECHNICAL_SYSTEM = """당신은 10년 경력의 시니어 개발자이자 기술 면접관입니다.
 정확하고 실무적인 관점에서 간결하게 답변하세요."""
-        }
 
-        prompt = f"""
+_TECHNICAL_TEMPLATE = """
 기술 면접 질문: {question}
 
 정확히 3문장으로 답변하세요.
@@ -34,30 +28,12 @@ Q: "HTTP와 HTTPS의 차이를 설명해주세요"
 A: "HTTP는 웹에서 데이터를 주고받는 기본 통신 프로토콜입니다. HTTPS는 HTTP에 SSL/TLS 암호화를 추가한 보안 프로토콜입니다. HTTPS는 데이터 보안이 중요한 서비스에서 필수적으로 사용됩니다."
 
 3문장만 출력:
-        """
+"""
 
-        response = self.client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                system_msg,
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,  # 문장 수 제한 준수를 위해 낮춤
-            max_tokens=300,  # 3문장 제한을 위해 토큰 수 감소
-            top_p=0.9  # 품질 높은 답변 선택을 위한 추가
-        )
-
-        output = response.choices[0].message.content.strip()
-        return output
-
-    def generate_situational_answer(self, question: str, user_answer: str) -> str:
-        system_msg = {
-            "role": "system",
-            "content": """당신은 HR 전문가이자 면접 코칭 전문가입니다. 
+_SITUATIONAL_SYSTEM = """당신은 HR 전문가이자 면접 코칭 전문가입니다.
 지원자 답변의 핵심 키워드와 경험 내용은 절대 변경하지 말고, 표현 방식만 개선하여 더 구체적이고 설득력 있게 만드세요."""
-        }
 
-        prompt = f"""
+_SITUATIONAL_TEMPLATE = """
 상황형 면접 질문: {question}
 지원자 답변: {user_answer}
 
@@ -77,21 +53,41 @@ Few-shot Examples:
 개선: "고객으로부터 서비스 품질에 대한 불만 사항이 접수되었습니다. 즉시 고객과 통화하여 문제를 파악하고 24시간 내 해결책을 제시했습니다. 고객 만족도가 향상되었고, 선제적 대응의 가치를 체감했습니다."
 
 3문장만 출력:
-        """
+"""
 
-        response = self.client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                system_msg,
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,  # 문장 수 제한 준수를 위해 낮춤
-            max_tokens=300,  # 3문장을 위해 토큰 수 증가
-            top_p=0.9
+
+class ModelAnswerGenerator:
+    """LCEL 체인 기반 모범답변 생성 (OpenAI 우선, Gemini 폴백)"""
+
+    def __init__(self, llm: Optional[Runnable] = None):
+        # 문장 수 제한 준수를 위해 낮은 temperature 유지 (기존 설정 보존)
+        self.llm = llm if llm is not None else get_chat_model(
+            primary="openai", temperature=0.1, max_tokens=300, top_p=0.9,
+        )
+        self._technical_chain = (
+            ChatPromptTemplate.from_messages([
+                ("system", _TECHNICAL_SYSTEM),
+                ("human", _TECHNICAL_TEMPLATE),
+            ])
+            | self.llm
+            | StrOutputParser()
+        )
+        self._situational_chain = (
+            ChatPromptTemplate.from_messages([
+                ("system", _SITUATIONAL_SYSTEM),
+                ("human", _SITUATIONAL_TEMPLATE),
+            ])
+            | self.llm
+            | StrOutputParser()
         )
 
-        output = response.choices[0].message.content.strip()
-        return output
+    def generate_technical_answer(self, question: str) -> str:
+        return self._technical_chain.invoke({"question": question}).strip()
+
+    def generate_situational_answer(self, question: str, user_answer: str) -> str:
+        return self._situational_chain.invoke(
+            {"question": question, "user_answer": user_answer}
+        ).strip()
 
     def generate(self, question: str, user_answer: str, evaluation_type: str) -> str:
         if evaluation_type == "technical":

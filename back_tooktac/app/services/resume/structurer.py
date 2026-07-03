@@ -1,20 +1,21 @@
-"""이력서 원문 텍스트 → 구조화 JSON 변환 (Gemini).
+"""이력서 원문 텍스트 → 구조화 JSON 변환 (LCEL 체인).
 
 출력 스키마는 질문 생성기(InterviewQuestionGenerator)가 읽는 필드에 맞춰 고정한다.
 """
-import json
 import logging
+from typing import Optional
 
-from google import genai
-from google.genai import types
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
 
-from app.config import GEMINI_API_KEY, GEMINI_MODEL_NAME
+from app.services.llm import get_chat_model
 
 logger = logging.getLogger(__name__)
 
 
 class ResumeStructuringError(Exception):
-    """Gemini 호출 실패 또는 응답 JSON 파싱 실패"""
+    """LLM 호출 실패 또는 응답 JSON 파싱 실패"""
 
 
 # 질문 생성기가 .get()으로 접근하는 키들 — 누락 시 기본값으로 채운다
@@ -61,22 +62,17 @@ def _normalize(data: dict) -> dict:
 
 
 class ResumeStructurer:
-    def __init__(self):
-        self.client = genai.Client(api_key=GEMINI_API_KEY)
-        self.model_name = GEMINI_MODEL_NAME
+    def __init__(self, llm: Optional[Runnable] = None):
+        self.llm = llm if llm is not None else get_chat_model(primary="gemini", temperature=0.2)
+        self.chain = (
+            ChatPromptTemplate.from_template(_PROMPT_TEMPLATE)
+            | self.llm
+            | JsonOutputParser()
+        )
 
     def structure(self, content: str) -> dict:
-        prompt = _PROMPT_TEMPLATE.format(content=content)
         try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.2,
-                    response_mime_type="application/json",
-                ),
-            )
-            data = json.loads(response.text)
+            data = self.chain.invoke({"content": content})
         except Exception as e:
             logger.exception("이력서 구조화 실패")
             raise ResumeStructuringError(str(e)) from e
