@@ -41,6 +41,15 @@ ai-interview-service/
 
 ## 시작하기
 
+### 0. 시스템 요구사항 (백엔드)
+
+- **ffmpeg** — 음성 답변(webm→wav) 변환에 필요합니다. Python 패키지가 아니라 OS에 설치하는 바이너리입니다.
+  - Windows: https://www.gyan.dev/ffmpeg/builds/ 에서 다운로드 후 압축 해제, `bin` 폴더를 PATH에 추가
+  - macOS: `brew install ffmpeg`
+  - Linux(Ubuntu): `sudo apt install ffmpeg`
+  - 설치 확인: `ffmpeg -version`
+- MySQL 8.x
+
 ### 1. 백엔드 실행
 
 ```bash

@@ -66,6 +66,14 @@ def get_full_latest_result(
     # if not video_result:
     #     raise HTTPException(status_code=404, detail="VideoEvaluationResult 없음")
 
+    # 처리 상태: 평가 행이 없으면 아직 분석 중, 있는데 model_answer가 비면 실패(최소 기록)
+    if text_result is None:
+        status = "processing"
+    elif text_result.model_answer:
+        status = "done"
+    else:
+        status = "failed"
+
     question_analysis = {
         "type": latest_question.question_type,
         "detailAnalysis": {
@@ -102,6 +110,7 @@ def get_full_latest_result(
     # }
 
     return {
+        "status": status,  # processing | done | failed — 프론트 폴링 종료 판단용
         "session_id": latest_session.id,
         "question_order": latest_question.question_order,
         "question": latest_question.question_text or "",

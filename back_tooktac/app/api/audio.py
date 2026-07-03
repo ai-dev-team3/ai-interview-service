@@ -104,7 +104,14 @@ async def websocket_endpoint(websocket: WebSocket):
         # 8) ffmpeg 변환
         cmd = ["ffmpeg", "-i", webm_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path, "-y", "-loglevel", "error"]
         # 동기 호출을 그대로 두면 이벤트 루프가 멈춰 다른 요청/웹소켓이 전부 대기함 → 워커 스레드로 위임
-        proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
+        try:
+            proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
+        except FileNotFoundError:
+            # ffmpeg 바이너리가 PATH에 없음 — 기록 없이 빠지면 프론트가 무한 폴링하므로 최소 결과 저장
+            logger.error("ffmpeg를 찾을 수 없습니다. 서버에 ffmpeg 설치가 필요합니다 (README 참고).")
+            _save_minimal_result(db, user_id, session.id, question, reason="ffmpeg 미설치")
+            await websocket.send_json({"transcript": "", "feedback": _empty_feedback("서버 오디오 변환 도구(ffmpeg)가 설치되어 있지 않습니다.")})
+            return
         if proc.returncode != 0:
             _save_minimal_result(db, user_id, session.id, question, reason="ffmpeg 변환 실패")
             await websocket.send_json({"transcript": "", "feedback": _empty_feedback("ffmpeg 변환 실패")})
