@@ -2,10 +2,6 @@ import logging
 """최종 보고서 생성 진입점 - 파싱/집계/조언/조립을 오케스트레이션"""
 from typing import Dict, List
 
-from google import genai
-from google.genai import types
-
-from app.config import GEMINI_API_KEY, GEMINI_MODEL_NAME
 from .models import UserInfo, QuestionAnalysis
 from .data_parser import DataParser
 from .score_aggregator import ScoreAggregator
@@ -18,21 +14,6 @@ logger = logging.getLogger(__name__)
 
 class FinalEvaluationGenerator:
     def __init__(self):
-        self.client = genai.Client(api_key=GEMINI_API_KEY)
-        self.model_name = GEMINI_MODEL_NAME
-        self.generation_config = types.GenerateContentConfig(
-            temperature=0.7,
-            top_p=0.8,
-            top_k=40,
-            max_output_tokens=10000,
-            safety_settings=[
-                types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_ONLY_HIGH"),
-                types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_ONLY_HIGH"),
-                types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_ONLY_HIGH"),
-                types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_ONLY_HIGH"),
-            ],
-        )
-
         self.step_names = [
             '아이스브레이킹', '질문 1', '질문 2', '질문 3',
             '질문 4', '질문 5', '질문 6', '최종 평가'
@@ -45,7 +26,7 @@ class FinalEvaluationGenerator:
             aggregated_scores = score_aggregator.aggregate_all_scores(question_analyses)
 
             # 2. AI 조언 생성
-            gemini_advisor = GeminiAdvisor(self.client, self.model_name, self.generation_config)
+            gemini_advisor = GeminiAdvisor()
             ai_advice = gemini_advisor.generate_all_advice(
                 question_analyses,
                 aggregated_scores,

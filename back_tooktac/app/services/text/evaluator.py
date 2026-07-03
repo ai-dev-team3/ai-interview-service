@@ -1,10 +1,12 @@
-from openai import OpenAI
-from app.config import OPENAI_API_KEY
-import json
+from typing import Optional
 
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
 
-class AnswerEvaluator:
-    INTERVIEWER_PERSONA = """
+from app.services.llm import get_chat_model
+
+_INTERVIEWER_PERSONA = """
 당신은 다음과 같은 배경을 가진 전문가입니다:
 - 20년 경력의 시니어 면접관 및 인사담당자
 - 다양한 직무 면접 경험 보유
@@ -13,28 +15,18 @@ class AnswerEvaluator:
 - 질문과 답변의 숨겨진 의도를 정확히 파악하는 능력
 """
 
-    def __init__(self):
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
-
-    def evaluate(self, question: str, user_answer: str, evaluation_type: str) -> dict:
-        if evaluation_type == "technical":
-            return self._evaluate_technical(question, user_answer)
-        else:
-            return self._evaluate_situational(question, user_answer)
-
-    def _evaluate_technical(self, question: str, user_answer: str) -> dict:
-        prompt = """
-    """ + self.INTERVIEWER_PERSONA + """ 
+_TECHNICAL_TEMPLATE = """
+    """ + _INTERVIEWER_PERSONA + """
 
     Return the result in the following JSON format (all content must be in Korean):
 
-    {
+    {{
     "intent_score": float,           // 질문 의도 파악 점수 (1점부터 10점까지)
     "knowledge_score": float,        // 지식 정확도 점수 (1점부터 10점까지)
     "strengths": ["강점1", "강점2"],
     "improvements": ["개선점1", "개선점2"],
     "final_feedback": "전체 총평 (in Korean)"
-    }
+    }}
 
     Scoring Criteria (1점부터 10점까지):
 
@@ -61,45 +53,32 @@ class AnswerEvaluator:
 
     -----
 
-    질문 (in Korean):  
-    """ + question + """
+    질문 (in Korean):
+    {question}
 
-    사용자 답변 (in Korean):  
-    """ + user_answer + """
+    사용자 답변 (in Korean):
+    {user_answer}
 
-    Important: Output must be written in Korean only.  
+    Important: Output must be written in Korean only.
     Strictly follow the JSON format above. Do not add any explanation or commentary outside the JSON.
     """
 
-        response = self.client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=800
-        )
+_SITUATIONAL_TEMPLATE = """
+    """ + _INTERVIEWER_PERSONA + """
 
-        result = json.loads(response.choices[0].message.content.strip())
-        result["intent_score"] = max(1.0, min(10.0, float(result.get("intent_score", 1.0))))
-        result["knowledge_score"] = max(1.0, min(10.0, float(result.get("knowledge_score", 1.0))))
-        return result
-
-    def _evaluate_situational(self, question: str, user_answer: str) -> dict:
-        prompt = """
-    """ + self.INTERVIEWER_PERSONA + """  
-
-    You will receive an interview question and a candidate's answer, both in Korean.  
-    Your task is to evaluate the answer across two dimensions and return a structured evaluation in JSON format.  
+    You will receive an interview question and a candidate's answer, both in Korean.
+    Your task is to evaluate the answer across two dimensions and return a structured evaluation in JSON format.
     **All output (including feedback and explanation) must be written in Korean. Do not use English.**
 
     Please strictly follow this output format:
 
-    {
+    {{
     "intent_score": float,           // 질문 의도 파악 점수 (1점부터 10점까지)
     "knowledge_score": float,        // 지식 정확도 점수 (1점부터 10점까지)
     "strengths": ["강점1", "강점2"],
     "improvements": ["개선점1", "개선점2"],
     "final_feedback": "전체 총평 (in Korean)"
-    }
+    }}
 
     Scoring Criteria (1점부터 10점까지):
 
@@ -127,23 +106,38 @@ class AnswerEvaluator:
 
     -----
 
-    질문 (in Korean):  
-    """ + question + """
+    질문 (in Korean):
+    {question}
 
-    사용자 답변 (in Korean):  
-    """ + user_answer + """
+    사용자 답변 (in Korean):
+    {user_answer}
 
     Repeat: Output must be written in Korean only. Output must strictly follow the JSON format above. Do not add extra explanation.
     """
 
-        response = self.client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=800
+
+class AnswerEvaluator:
+    """LCEL 체인 기반 답변 평가 (OpenAI 우선, Gemini 폴백)"""
+
+    def __init__(self, llm: Optional[Runnable] = None):
+        self.llm = llm if llm is not None else get_chat_model(
+            primary="openai", temperature=0.2, max_tokens=800,
+        )
+        parser = JsonOutputParser()
+        self._technical_chain = (
+            ChatPromptTemplate.from_template(_TECHNICAL_TEMPLATE) | self.llm | parser
+        )
+        self._situational_chain = (
+            ChatPromptTemplate.from_template(_SITUATIONAL_TEMPLATE) | self.llm | parser
         )
 
-        result = json.loads(response.choices[0].message.content.strip())
+    def evaluate(self, question: str, user_answer: str, evaluation_type: str) -> dict:
+        if evaluation_type == "technical":
+            chain = self._technical_chain
+        else:
+            chain = self._situational_chain
+
+        result = chain.invoke({"question": question, "user_answer": user_answer})
         result["intent_score"] = max(1.0, min(10.0, float(result.get("intent_score", 1.0))))
         result["knowledge_score"] = max(1.0, min(10.0, float(result.get("knowledge_score", 1.0))))
         return result
