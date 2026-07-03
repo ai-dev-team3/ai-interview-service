@@ -6,7 +6,8 @@ from app.services.vision.posture_analyzer import PostureAnalyzer, PostureCoreMod
 from app.services.emotion.emotion_analyzer import EmotionAnalyzer, EmotionCoreModel, EmotionSessionState  # 감정 분석기 구성요소
 from app.utils.auth_ws import get_user_id_from_websocket  # WebSocket에서 사용자 인증 정보 추출
 from app.repository.analysis import VideoEvaluationResult  # 결과 저장용 ORM 모델
-from app.repository.interview import InterviewQuestion, InterviewSession  # 세션/질문 ORM
+from app.repository.interview import InterviewQuestion  # 질문 ORM
+from app.services.interview.session_service import resolve_session  # 세션 결정 헬퍼
 from app.repository.database import get_db  # DB 세션 팩토리
 import numpy as np  # 바이트→배열 변환
 import cv2  # 이미지 디코딩
@@ -27,18 +28,14 @@ def _save_video_result(
     question_order: int,
     posture_state: "PostureSessionState",
     emotion_state: "EmotionSessionState",
+    explicit_session_id: int | None = None,
 ) -> None:
     """질문 종료 시점의 누적 상태를 VideoEvaluationResult로 저장 (세션/질문 없으면 스킵)"""
     final_video = posture_state.finalize()  # 포즈 최종 점수 계산
     emo_sum = emotion_state.summary()  # 감정 요약 계산
 
-    # 사용자 최신 세션 조회
-    session = (
-        db.query(InterviewSession)
-        .filter_by(user_id=user_id)
-        .order_by(InterviewSession.started_at.desc())
-        .first()
-    )
+    # 세션 결정 (명시 session_id 우선, 소유권 검증 포함 / 없으면 최신 세션 폴백)
+    session = resolve_session(db, user_id, explicit_session_id)
     if not session:
         return  # 세션 없으면 저장 스킵
 
@@ -86,6 +83,7 @@ async def expression_socket(websocket: WebSocket):
     # 인증/파라미터 파싱 전에 예외가 나도 except 블록에서 참조 가능하도록 선초기화
     user_id: int | None = None
     question_order: int | None = None
+    explicit_session_id: int | None = None
 
     db: Session = next(get_db())  # DB 세션 획득
     try:
@@ -98,6 +96,11 @@ async def expression_socket(websocket: WebSocket):
             return  # 소켓 종료
 
         question_order = int(order_str)  # 정수 변환
+
+        # session_id가 명시되면 해당 세션에 저장 (없으면 최신 세션 폴백)
+        sid_str = websocket.query_params.get("session_id")
+        if sid_str and sid_str.isdigit():
+            explicit_session_id = int(sid_str)
 
         while True:
             data = await websocket.receive_bytes()  # 클라이언트가 전송한 바이너리 프레임 수신
@@ -129,12 +132,12 @@ async def expression_socket(websocket: WebSocket):
     except WebSocketDisconnect:
         # 연결 종료 시 이 질문의 최종 결과 저장 (인증/파라미터 확보 전이면 스킵)
         if user_id is not None and question_order is not None:
-            _save_video_result(db, user_id, question_order, posture_state, emotion_state)
+            _save_video_result(db, user_id, question_order, posture_state, emotion_state, explicit_session_id)
 
     except Exception:
         # 예외 발생 시에도 현재까지 상태로 저장 시도 (인증 실패 등으로 미확보면 스킵)
         if user_id is not None and question_order is not None:
-            _save_video_result(db, user_id, question_order, posture_state, emotion_state)
+            _save_video_result(db, user_id, question_order, posture_state, emotion_state, explicit_session_id)
 
         # 프론트에 오류 알림(가능하면 마지막으로 시도)
         try:
