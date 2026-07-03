@@ -39,7 +39,8 @@ def test_avg_or_zero():
 # ---------- 리포트 조회 API ----------
 
 def _seed_report(db, user_id):
-    session = InterviewSession(user_id=user_id, started_at=datetime.now())
+    # started_at은 모델 기본값(naive UTC) 사용 — 저장 규약과 일치시킴
+    session = InterviewSession(user_id=user_id)
     db.add(session)
     db.flush()
 
@@ -61,7 +62,10 @@ def _seed_report(db, user_id):
 
 def test_report_by_date(auth_client, db_session, test_user):
     _seed_report(db_session, test_user.id)
-    today = datetime.now().strftime("%Y-%m-%d")
+    # 조회 날짜 기준은 KST (UTC 저장 → KST 날짜 변환 규약)
+    from app.utils.time_utils import kst_today
+
+    today = kst_today().strftime("%Y-%m-%d")
 
     res = auth_client.get(f"/report/date/{today}")
     assert res.status_code == 200

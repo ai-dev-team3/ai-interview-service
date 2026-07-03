@@ -1,11 +1,12 @@
 # app/api/routes/result.py
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.repository.database import get_db
 from app.repository.analysis import EvaluationResult, VideoEvaluationResult
-from app.repository.interview import InterviewSession, InterviewQuestion, InterviewAnswer
+from app.repository.interview import InterviewQuestion, InterviewAnswer
+from app.services.interview.session_service import resolve_session
 from app.services.user.dependencies import get_current_user
 from app.services.score.scoring import QuestionTypeWeights
 
@@ -15,17 +16,13 @@ router = APIRouter()
 
 @router.get("/result/full/latest")
 def get_full_latest_result(
+    session_id: int | None = Query(None, description="명시하면 해당 세션 기준, 없으면 최신 세션"),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user)
 ):
-    logger.debug("/result/full/latest user_id=%s", user_id)
-    # 1. 가장 최근 세션 가져오기
-    latest_session = (
-        db.query(InterviewSession)
-        .filter_by(user_id=user_id)
-        .order_by(InterviewSession.started_at.desc())
-        .first()
-    )
+    logger.debug("/result/full/latest user_id=%s session_id=%s", user_id, session_id)
+    # 1. 세션 결정 (명시 session_id 우선, 소유권 검증 포함)
+    latest_session = resolve_session(db, user_id, session_id)
     if not latest_session:
         raise HTTPException(status_code=404, detail="latest_session 없음")
     logger.debug("latest_session: %s", latest_session)
@@ -69,6 +66,14 @@ def get_full_latest_result(
     # if not video_result:
     #     raise HTTPException(status_code=404, detail="VideoEvaluationResult 없음")
 
+    # 처리 상태: 평가 행이 없으면 아직 분석 중, 있는데 model_answer가 비면 실패(최소 기록)
+    if text_result is None:
+        status = "processing"
+    elif text_result.model_answer:
+        status = "done"
+    else:
+        status = "failed"
+
     question_analysis = {
         "type": latest_question.question_type,
         "detailAnalysis": {
@@ -105,6 +110,7 @@ def get_full_latest_result(
     # }
 
     return {
+        "status": status,  # processing | done | failed — 프론트 폴링 종료 판단용
         "session_id": latest_session.id,
         "question_order": latest_question.question_order,
         "question": latest_question.question_text or "",

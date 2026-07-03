@@ -62,13 +62,32 @@ export const getResumeStatus = async (): Promise<{ has_resume: boolean }> => {
   return response.data;
 };
 
+// 진행 중인 면접 세션 ID 저장/조회 (탭·재시작 간 혼선 방지용으로 백엔드에 명시 전달)
+const SESSION_KEY = 'interview_session_id';
+
+export const getInterviewSessionId = (): number | null => {
+  if (typeof window === 'undefined') return null;
+  const raw = sessionStorage.getItem(SESSION_KEY);
+  return raw ? Number(raw) : null;
+};
+
+const sessionParams = () => {
+  const sid = getInterviewSessionId();
+  return sid ? { session_id: sid } : {};
+};
+
 export const startInterview = async () => {
   const response = await api.post("/start-interview");
+  if (typeof window !== 'undefined' && response.data?.session_id) {
+    sessionStorage.setItem(SESSION_KEY, String(response.data.session_id));
+  }
   return response.data;
 };
 
 export const generateNextQuestion = async (questionOrder: number) => {
-  const response = await api.post(`/generate-question/${questionOrder}`);
+  const response = await api.post(`/generate-question/${questionOrder}`, null, {
+    params: sessionParams(),
+  });
   return response.data; // { session_id, question }
 };
 
@@ -84,12 +103,12 @@ export const fetchEvaluationResult = async () => {
 
 // 질문별 분석결과 api
 export const fetchFullLatestResult = async () => {
-  const response = await api.get("/result/full/latest");
+  const response = await api.get("/result/full/latest", { params: sessionParams() });
   return response.data;
 };
 
 export const fetchFinalReport = async () => {
-  const response = await api.post("/report/final");
+  const response = await api.post("/report/final", null, { params: sessionParams() });
   return response.data;
 };
 

@@ -23,7 +23,7 @@ def _set_access_cookie(response: Response, origin: str, value: str, max_age: int
             max_age=max_age,
         )
     else:
-        # local development (localhost)
+        # local development (localhost:3000)
         response.set_cookie(
             key="access_token",
             value=value,
@@ -64,6 +64,9 @@ def logout(request: Request, response: Response):
 @router.get("/me")
 def get_me(user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_obj = db.query(User).filter(User.id == user).first()
+    if user_obj is None:
+        # 토큰은 유효하지만 사용자가 삭제된 경우
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
     return {
         "user_id": user_obj.id,
         "nickname": user_obj.nickname,

@@ -8,6 +8,7 @@ from app.repository.interview import InterviewSession
 from app.repository.user import User
 from app.repository.report import FinalReportSummary  # final_report_summary ORM 모델
 from app.services.user.dependencies import get_current_user # 프로젝트에서 사용 중인 인증 의존성
+from app.utils.time_utils import kst_date_expr  # started_at(UTC)을 KST 날짜로 변환
 
 
 router = APIRouter()
@@ -28,7 +29,7 @@ def get_daily_average_scores(
     """
 
     # 날짜 단위 컬럼
-    session_date = func.date(InterviewSession.started_at).label("session_date")
+    session_date = kst_date_expr(InterviewSession.started_at).label("session_date")
 
     # 같은 유저-같은 날짜 내 '마지막 세션' 선정을 위한 ROW_NUMBER()
     rn_in_day = func.row_number().over(
@@ -129,7 +130,7 @@ def get_peer_average_scores_up_to_my_days(
     MySQL 8+ (윈도우 함수) 전제.
     """
 
-    session_date = func.date(InterviewSession.started_at).label("session_date")
+    session_date = kst_date_expr(InterviewSession.started_at).label("session_date")
 
     rn_in_day = func.row_number().over(
         partition_by=(InterviewSession.user_id, session_date),
@@ -348,7 +349,7 @@ def get_job_stats(
         raise HTTPException(status_code=400, detail="사용자의 desired_job 정보를 찾을 수 없습니다.")
 
     # 1) 윈도 컬럼: 캘린더 날짜 + (유저, 날짜)별 마지막 세션 + 유저별 일차
-    session_date = func.date(InterviewSession.started_at).label("session_date")
+    session_date = kst_date_expr(InterviewSession.started_at).label("session_date")
     rn_in_day = func.row_number().over(
         partition_by=(InterviewSession.user_id, session_date),
         order_by=InterviewSession.started_at.desc()
