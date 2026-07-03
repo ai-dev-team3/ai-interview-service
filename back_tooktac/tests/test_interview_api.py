@@ -2,13 +2,11 @@
 import pytest
 
 from app.repository.interview import InterviewQuestion, InterviewSession
+from app.repository.resume import Resume
 
 
 class FakeQuestionGenerator:
     """InterviewQuestionGenerator를 대체하는 목 — 네트워크 호출 없음"""
-
-    def load_structured_from_db(self, db, user_id):
-        return {"structured_content": {"skills": ["Python"], "education": {}}}
 
     def generate_conceptual_question(self, parsed):
         return {"question": "개념 질문입니다", "question_type": "개념설명형"}
@@ -34,6 +32,20 @@ def mock_generator(monkeypatch):
     monkeypatch.setattr(
         "app.api.interview.InterviewQuestionGenerator", FakeQuestionGenerator
     )
+
+
+@pytest.fixture(autouse=True)
+def structured_resume(db_session, test_user):
+    """면접 시작에 필요한 구조화 완료 이력서를 미리 등록"""
+    resume = Resume(
+        user_id=test_user.id,
+        filename="resume.pdf",
+        content="이력서 원문",
+        structured={"skills": ["Python"], "education": {}},
+    )
+    db_session.add(resume)
+    db_session.commit()
+    return resume
 
 
 def test_start_interview_creates_session_and_q1(auth_client, db_session, test_user):
@@ -79,3 +91,45 @@ def test_generate_question_without_session_404(auth_client):
 def test_start_interview_requires_auth(client):
     res = client.post("/start-interview")
     assert res.status_code == 401
+
+
+def test_start_interview_structures_lazily(auth_client, db_session, test_user, structured_resume, monkeypatch):
+    """structured가 없고 원문만 있으면 면접 시작 시점에 구조화 후 저장"""
+    lazy_structured = {"skills": ["FastAPI"], "education": {}, "career": {},
+                       "projects": [], "self_introduction": {}, "desired_position": {}}
+
+    class FakeStructurer:
+        def structure(self, content):
+            return dict(lazy_structured)
+
+    monkeypatch.setattr(
+        "app.services.resume.resume_service.ResumeStructurer", FakeStructurer
+    )
+
+    structured_resume.structured = None
+    db_session.commit()
+
+    res = auth_client.post("/start-interview")
+    assert res.status_code == 200
+
+    db_session.refresh(structured_resume)
+    assert structured_resume.structured == lazy_structured
+
+
+def test_start_interview_structuring_failure_returns_500(auth_client, db_session, structured_resume, monkeypatch):
+    from app.services.resume.structurer import ResumeStructuringError
+
+    class FailingStructurer:
+        def structure(self, content):
+            raise ResumeStructuringError("mock failure")
+
+    monkeypatch.setattr(
+        "app.services.resume.resume_service.ResumeStructurer", FailingStructurer
+    )
+
+    structured_resume.structured = None
+    db_session.commit()
+
+    res = auth_client.post("/start-interview")
+    assert res.status_code == 500
+    assert "이력서 분석" in res.json()["detail"]

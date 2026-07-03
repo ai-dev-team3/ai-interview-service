@@ -7,10 +7,24 @@ from app.services.text.make_question import InterviewQuestionGenerator
 from app.repository.interview import InterviewSession, InterviewQuestion
 from app.repository.database import get_db
 from app.services.user.dependencies import get_current_user
+from app.services.resume import resume_service
+from app.services.resume.resume_service import ResumeNotFoundError
+from app.services.resume.structurer import ResumeStructuringError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _load_parsed_resume(db, user_id) -> dict:
+    """구조화 이력서를 로드(필요 시 생성)해 질문 생성기 입력 형태로 반환"""
+    try:
+        structured = resume_service.ensure_structured(db, user_id)
+    except ResumeNotFoundError:
+        raise HTTPException(status_code=400, detail="이력서를 먼저 등록해주세요.")
+    except ResumeStructuringError:
+        raise HTTPException(status_code=500, detail="이력서 분석에 실패했습니다. 잠시 후 다시 시도해주세요.")
+    return {"structured_content": structured}
 
 @router.post("/start-interview")
 def start_interview(db: Session = Depends(get_db), user_id=Depends(get_current_user)):
@@ -21,11 +35,8 @@ def start_interview(db: Session = Depends(get_db), user_id=Depends(get_current_u
     db.flush()  # session.id 사용 가능
 
     # 질문 생성기
+    parsed = _load_parsed_resume(db, user_id)
     generator = InterviewQuestionGenerator()
-    try:
-        parsed = generator.load_structured_from_db(db, user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="이력서를 먼저 등록해주세요.")
     q1 = generator.generate_conceptual_question(parsed)
     logger.info("질문 생성 완료: %s", q1)
     # DB 저장
@@ -67,11 +78,8 @@ def generate_next_question(order: int, db: Session = Depends(get_db), user_id=De
     if not session:
         raise HTTPException(status_code=404, detail="세션 없음")
 
+    parsed = _load_parsed_resume(db, user_id)
     generator = InterviewQuestionGenerator()
-    try:
-        parsed = generator.load_structured_from_db(db, user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="이력서를 먼저 등록해주세요.")
 
     # ✅ 질문 생성
     if order == 2:

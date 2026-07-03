@@ -25,8 +25,16 @@ def upload_resume(
         raise HTTPException(status_code=400, detail="이력서 텍스트가 비어 있습니다.")
 
     resume = resume_service.upsert_resume(db, user_id, content=text, filename=filename)
-    logger.info("이력서 저장 완료 (user_id=%s, resume_id=%s)", user_id, resume.id)
-    return {"message": "이력서가 등록되었습니다.", "resume_id": resume.id}
+    structured = resume_service.try_structure(db, resume)
+    logger.info(
+        "이력서 저장 완료 (user_id=%s, resume_id=%s, structured=%s)",
+        user_id, resume.id, structured,
+    )
+    return {
+        "message": "이력서가 등록되었습니다.",
+        "resume_id": resume.id,
+        "structured": structured,
+    }
 
 
 @router.get("/resume/status")

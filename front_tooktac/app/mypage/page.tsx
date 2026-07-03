@@ -77,9 +77,13 @@ export default function MyPage() {
   const handleResumeExtracted = async (text: string, fileName?: string) => {
     setResumeSaving(true);
     try {
-      await uploadResume(text, fileName);
+      const result = await uploadResume(text, fileName);
       setHasResume(true);
-      setToast('이력서가 등록되었습니다.');
+      setToast(
+        result?.structured === false
+          ? '이력서가 저장되었습니다. 분석은 면접 시작 시 자동으로 진행됩니다.'
+          : '이력서가 등록되었습니다.'
+      );
     } catch {
       setToast('이력서 등록에 실패했습니다. 다시 시도해주세요.');
     } finally {
