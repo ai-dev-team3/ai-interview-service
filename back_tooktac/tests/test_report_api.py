@@ -1,7 +1,6 @@
 """리포트 조회 API 통합 테스트 + 순수 헬퍼 유닛 테스트"""
 from datetime import datetime
 
-from app.api.report import _avg_or_zero, _normalize_qtype, _to_number_score
 from app.repository.interview import InterviewSession
 from app.repository.report import (
     FinalReportSummary,
@@ -9,31 +8,32 @@ from app.repository.report import (
     ReportImprovement,
     ReportStrength,
 )
+from app.services.report.score_utils import avg_or_zero, normalize_question_type, to_number_score
 
 
 # ---------- 순수 헬퍼 유닛 테스트 ----------
 
 def test_to_number_score_variants():
-    assert _to_number_score(87) == 87
-    assert _to_number_score(87.6) == 88
-    assert _to_number_score({"score": 90}) == 90
-    assert _to_number_score({"value": 75.2}) == 75
-    assert _to_number_score({"unknown": 1}) == 0
-    assert _to_number_score("bad") == 0
+    assert to_number_score(87) == 87
+    assert to_number_score(87.6) == 88
+    assert to_number_score({"score": 90}) == 90
+    assert to_number_score({"value": 75.2}) == 75
+    assert to_number_score({"unknown": 1}) == 0
+    assert to_number_score("bad") == 0
 
 
 def test_normalize_qtype():
-    assert _normalize_qtype("개념설명형") == "concept"
-    assert _normalize_qtype("기술형") == "technical"
-    assert _normalize_qtype("상황형") == "situation"
-    assert _normalize_qtype("행동형") == "behavior"
-    assert _normalize_qtype("꼬리질문") == "followUp"
-    assert _normalize_qtype("") == "concept"  # 기본값
+    assert normalize_question_type("개념설명형") == "concept"
+    assert normalize_question_type("기술형") == "technical"
+    assert normalize_question_type("상황형") == "situation"
+    assert normalize_question_type("행동형") == "behavior"
+    assert normalize_question_type("꼬리질문") == "followUp"
+    assert normalize_question_type("") == "concept"  # 기본값
 
 
 def test_avg_or_zero():
-    assert _avg_or_zero([80, 90]) == 85
-    assert _avg_or_zero([]) == 0
+    assert avg_or_zero([80, 90]) == 85
+    assert avg_or_zero([]) == 0
 
 
 # ---------- 리포트 조회 API ----------

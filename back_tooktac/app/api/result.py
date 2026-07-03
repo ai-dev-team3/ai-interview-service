@@ -1,4 +1,4 @@
-# app/api/routes/result.py
+# app/api/result.py
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,15 +6,17 @@ from sqlalchemy.orm import Session
 from app.repository.database import get_db
 from app.repository.analysis import EvaluationResult, VideoEvaluationResult
 from app.repository.interview import InterviewQuestion, InterviewAnswer
+from app.schemas.result import FullResultResponse, SpeechLabels, VideoSummary
 from app.services.interview.session_service import resolve_session
 from app.services.user.dependencies import get_current_user
 from app.services.score.scoring import QuestionTypeWeights
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["result"])
 
-@router.get("/result/full/latest")
+
+@router.get("/result/full/latest", response_model=FullResultResponse)
 def get_full_latest_result(
     session_id: int | None = Query(None, description="명시하면 해당 세션 기준, 없으면 최신 세션"),
     db: Session = Depends(get_db),
@@ -25,7 +27,6 @@ def get_full_latest_result(
     latest_session = resolve_session(db, user_id, session_id)
     if not latest_session:
         raise HTTPException(status_code=404, detail="latest_session 없음")
-    logger.debug("latest_session: %s", latest_session)
 
     # 2. 가장 마지막 질문 가져오기
     latest_question = (
@@ -36,16 +37,14 @@ def get_full_latest_result(
     )
     if not latest_question:
         raise HTTPException(status_code=404, detail="latest_question 질문 없음")
-    logger.debug("latest_question: %s", latest_question)
 
-    # 3. 해당 질문의 답변 가져오기
+    # 3. 해당 질문의 답변 (아직 없을 수 있음 — 스키마 기본값으로 방어)
     latest_answer = (
         db.query(InterviewAnswer)
         .filter_by(question_id=latest_question.id)
         .first()
     )
-    # if not latest_answer:
-    #     raise HTTPException(status_code=404, detail="latest_answer 없음")
+
     # 4. 텍스트/음성 평가 결과
     text_result = (
         db.query(EvaluationResult)
@@ -53,8 +52,6 @@ def get_full_latest_result(
         .order_by(EvaluationResult.created_at.desc())
         .first()
     )
-    # if not text_result:
-    #     raise HTTPException(status_code=404, detail="EvaluationResult 없음")
 
     # 5. 영상 평가 결과
     video_result = (
@@ -63,8 +60,6 @@ def get_full_latest_result(
         .order_by(VideoEvaluationResult.created_at.desc())
         .first()
     )
-    # if not video_result:
-    #     raise HTTPException(status_code=404, detail="VideoEvaluationResult 없음")
 
     # 처리 상태: 평가 행이 없으면 아직 분석 중, 있는데 model_answer가 비면 실패(최소 기록)
     if text_result is None:
@@ -86,49 +81,26 @@ def get_full_latest_result(
 
     weighted_score = QuestionTypeWeights.calculate_weighted_score(question_analysis)
 
-    # return {
-    #     "session_id": latest_session.id,
-    #     "question_order": latest_question.question_order,
-    #     "question": latest_question.question_text,
-    #     "user_answer": latest_answer.answer_text if latest_answer else "",
-    #     "model_answer": text_result.model_answer or "",
-    #     "strengths": text_result.strengths.split("\n") if text_result.strengths else [],
-    #     "improvements": text_result.improvements.split("\n") if text_result.improvements else [],
-    #     "final_feedback": text_result.final_feedback,
-    #     "labels": {
-    #         "speed": text_result.speed_label,
-    #         "fluency": text_result.fluency_label,
-    #         "tone": text_result.tone_label
-    #     },
-    #     "video": {
-    #         "gaze_score": video_result.gaze_score if video_result else None,
-    #         "shoulder_warning": video_result.shoulder_warning if video_result else None,
-    #         "hand_warning": video_result.hand_warning if video_result else None,
-    #     },
-    #     "best_emotion": video_result.emotion_best if video_result else None,
-    #     "weighted_score": weighted_score
-    # }
-
-    return {
-        "status": status,  # processing | done | failed — 프론트 폴링 종료 판단용
-        "session_id": latest_session.id,
-        "question_order": latest_question.question_order,
-        "question": latest_question.question_text or "",
-        "user_answer": latest_answer.answer_text if latest_answer and latest_answer.answer_text else "",
-        "model_answer": (text_result.model_answer if text_result and text_result.model_answer else ""),
-        "strengths": (text_result.strengths.split("\n") if text_result and text_result.strengths else []),
-        "improvements": (text_result.improvements.split("\n") if text_result and text_result.improvements else []),
-        "final_feedback": (text_result.final_feedback if text_result and text_result.final_feedback else ""),
-        "labels": {
-            "speed": (text_result.speed_label if text_result and text_result.speed_label else ""),
-            "fluency": (text_result.fluency_label if text_result and text_result.fluency_label else ""),
-            "tone": (text_result.tone_label if text_result and text_result.tone_label else "")
-        },
-        "video": {
-            "gaze_score": (video_result.gaze_score if video_result and video_result.gaze_score is not None else 0),
-            "shoulder_warning": (video_result.shoulder_warning if video_result and video_result.shoulder_warning is not None else 0),
-            "hand_warning": (video_result.hand_warning if video_result and video_result.hand_warning is not None else 0),
-        },
-        "best_emotion": (video_result.emotion_best if video_result and video_result.emotion_best else ""),
-        "weighted_score": weighted_score
-    }
+    return FullResultResponse(
+        status=status,  # processing | done | failed — 프론트 폴링 종료 판단용
+        session_id=latest_session.id,
+        question_order=latest_question.question_order,
+        question=latest_question.question_text or "",
+        user_answer=(latest_answer.answer_text or "") if latest_answer else "",
+        model_answer=(text_result.model_answer or "") if text_result else "",
+        strengths=text_result.strengths.split("\n") if text_result and text_result.strengths else [],
+        improvements=text_result.improvements.split("\n") if text_result and text_result.improvements else [],
+        final_feedback=(text_result.final_feedback or "") if text_result else "",
+        labels=SpeechLabels(
+            speed=(text_result.speed_label or "") if text_result else "",
+            fluency=(text_result.fluency_label or "") if text_result else "",
+            tone=(text_result.tone_label or "") if text_result else "",
+        ),
+        video=VideoSummary(
+            gaze_score=(video_result.gaze_score or 0) if video_result else 0,
+            shoulder_warning=(video_result.shoulder_warning or 0) if video_result else 0,
+            hand_warning=(video_result.hand_warning or 0) if video_result else 0,
+        ),
+        best_emotion=(video_result.emotion_best or "") if video_result else "",
+        weighted_score=weighted_score,
+    )

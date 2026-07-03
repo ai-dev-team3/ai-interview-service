@@ -17,6 +17,7 @@ _ROUTER_MODULES = {
     "result_router": ".result",
     "report_router": ".report",
     "training_page_router": ".training_page",
+    "rank_router": ".rank",
 }
 
 __all__ = list(_ROUTER_MODULES)

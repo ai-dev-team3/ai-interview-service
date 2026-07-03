@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 class FinalEvaluationGenerator:
     def __init__(self):
-        self.step_names = [
-            '아이스브레이킹', '질문 1', '질문 2', '질문 3',
-            '질문 4', '질문 5', '질문 6', '최종 평가'
-        ]
+        # 단계 이름은 면접 구성 단일 소스(plan.STEP_NAMES)를 따른다
+        from app.services.interview.plan import STEP_NAMES
+
+        self.step_names = list(STEP_NAMES)
 
     def generate_final_report(self, user_info: UserInfo, question_analyses: List[QuestionAnalysis]) -> Dict:
         try:

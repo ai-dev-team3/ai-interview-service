@@ -20,19 +20,6 @@ class SpeechAnalyzer:
             "혹시", "일단", "다만", "결국", "음...", "그…", "어…", "음… 그니까"
         ]
 
-    def find_filler_words(self) -> List[Tuple[str, int]]:
-        """
-        전체 텍스트에서 간투어를 (간투어, 위치)로 반환
-        """
-        # 1. 구두점 제거
-        cleaned_text = re.sub(r'[^\w\s]', '', self.total_text)
-
-        # 2. 토큰화
-        tokens = cleaned_text.strip().split()
-
-        # 3. 간투어 탐지
-        return [(word, idx) for idx, word in enumerate(tokens) if word in self.filler_words]
-
     def speech_speed_calculate(self) -> Dict:
         """
         내부 상태(self.segments)를 기반으로 말속도 분석 수행
