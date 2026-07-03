@@ -1,37 +1,17 @@
 from google import genai
-import json
-from typing import Dict, Any, Optional
-from sqlalchemy.orm import Session
+from typing import Dict, Any
 from app.config import GEMINI_API_KEY, GEMINI_MODEL_NAME
-from app.repository.resume import Resume
 
 class InterviewQuestionGenerator:
-    """Gemini API를 사용한 면접 질문 생성 클래스"""
-    
+    """Gemini API를 사용한 면접 질문 생성 클래스
+
+    입력(parsed_data)은 {"structured_content": {...}} 형태이며,
+    구조화 이력서 로드/생성은 app.services.resume.resume_service가 담당한다.
+    """
+
     def __init__(self):
         self.client = genai.Client(api_key=GEMINI_API_KEY)
         self.model_name = GEMINI_MODEL_NAME
-    
-    # def load_parsed_data(self, doc_id: str) -> Dict[str, Any]:
-    #     """저장된 파싱 데이터 불러오기"""
-    #     file_path = os.path.join(self.storage_path, f"{doc_id}.json")
-    #     with open(file_path, 'r', encoding='utf-8') as f:
-    #         data = json.load(f)
-    #     # data['data'] 구조: {full_text, pages, structured_content}
-    #     return data['data']
-    
-    def load_structured_from_db(self, db: Session, user_id: int) -> Dict[str, Any]:
-        resume_entry = db.query(Resume).filter(Resume.user_id == user_id).first()
-        if not resume_entry or not resume_entry.structured:
-            raise ValueError("구조화된 이력서 정보가 없습니다.")
-
-        if isinstance(resume_entry.structured, str):
-            structured_content = json.loads(resume_entry.structured)
-        else:
-            structured_content = resume_entry.structured
-        return {
-            "structured_content": structured_content
-        }
 
     def generate_conceptual_question(self, parsed_data: Dict[str, Any]) -> Dict[str, str]:
         """Q1: 개념설명형 질문 생성 (이력서 기반)"""
