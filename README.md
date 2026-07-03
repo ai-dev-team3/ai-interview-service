@@ -50,6 +50,24 @@ uv run python -c "from app.repository.database import Base, engine; import app.r
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### 1-1. DB 스키마 마이그레이션 (Alembic)
+
+스키마 변경은 Alembic 마이그레이션으로 관리합니다 (`back_tooktac/alembic/`).
+
+```bash
+cd back_tooktac
+
+# 새 DB: 전체 스키마 적용
+uv run alembic upgrade head
+
+# 이미 create_all로 생성된 기존 DB: 현재 상태를 기준으로 표시만
+uv run alembic stamp head
+
+# 모델 변경 후 마이그레이션 생성 → 적용
+uv run alembic revision --autogenerate -m "변경 내용"
+uv run alembic upgrade head
+```
+
 ### 2. 프론트엔드 실행
 
 ```bash

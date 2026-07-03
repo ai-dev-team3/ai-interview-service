@@ -1,39 +1,17 @@
 import logging
-import os
-import sys
-
-
-logger = logging.getLogger(__name__)
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
 import json
 import requests
 import time
 from app.core.jwt_token_updater import JwtTokenManager
-from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
 
 class VitoSpeechClient:
-    def __init__(self, token_path: str = None):
-        # 현재 파일 기준으로 루트 경로를 계산
-        if token_path is None:
-            BASE_DIR = Path(__file__).resolve().parent.parent.parent  # 예: app/services/stt/ → app
-            token_path = BASE_DIR / "vito_jwt_token.json"
-        else:
-            token_path = Path(token_path)
-
-        JwtTokenManager().update_token_if_needed()
-
-        if not token_path.exists():
-            raise FileNotFoundError(f"{token_path} 파일이 존재하지 않습니다.")
-
-        with open(token_path, "r", encoding="utf-8") as f:
-            token_data = json.load(f)
-
-        self.jwt_token = token_data.get("access_token")
-        if not self.jwt_token:
-            raise ValueError("JWT 토큰을 JSON에서 읽을 수 없습니다.")
-
+    def __init__(self):
+        # 토큰은 파일이 아니라 프로세스 메모리 캐시에서 가져온다 (만료 시 자동 재발급)
+        self.jwt_token = JwtTokenManager().get_token()
         self.base_url = "https://openapi.vito.ai/v1"
 
     def transcribe_file(self, file_path: str) -> str:
