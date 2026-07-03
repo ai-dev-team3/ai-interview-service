@@ -1,10 +1,11 @@
 # app/api/routes/interview.py
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.services.text.make_question import InterviewQuestionGenerator
 from app.repository.interview import InterviewSession, InterviewQuestion
+from app.services.interview.session_service import resolve_session
 from app.repository.database import get_db
 from app.services.interview.plan import QUESTION_FLOW
 from app.services.user.dependencies import get_current_user
@@ -84,11 +85,14 @@ def start_interview(db: Session = Depends(get_db), user_id=Depends(get_current_u
 
 
 @router.post("/generate-question/{order}")
-def generate_next_question(order: int, db: Session = Depends(get_db), user_id=Depends(get_current_user)):
-    # 최신 세션 조회
-    session = db.query(InterviewSession).filter(
-        InterviewSession.user_id == user_id
-    ).order_by(InterviewSession.started_at.desc()).first()
+def generate_next_question(
+    order: int,
+    session_id: int | None = Query(None, description="명시하면 해당 세션에 질문 추가, 없으면 최신 세션"),
+    db: Session = Depends(get_db),
+    user_id=Depends(get_current_user),
+):
+    # 세션 결정 (명시 session_id 우선, 소유권 검증 포함)
+    session = resolve_session(db, user_id, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="세션 없음")
 

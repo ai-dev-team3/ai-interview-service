@@ -1,15 +1,15 @@
-# app/api/report.py
+﻿# app/api/report.py
 """최종 리포트 생성/조회 엔드포인트.
 
 랭킹(/rank/*)은 rank.py, 훈련 통계(/training/*)는 training_page.py로 분리됨.
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.repository.database import get_db
+from app.services.interview.session_service import resolve_session
 from app.services.user.dependencies import get_current_user
 from app.repository.interview import InterviewSession
 from app.repository.report import (
@@ -19,22 +19,19 @@ from app.repository.report import (
 from app.services.report.final_report_processor import FinalEvaluationGenerator
 from app.services.report.interview_data_formatter import generate_interview_json_from_session
 from app.services.report.score_utils import find_area_score
+from app.utils.time_utils import kst_day_utc_range
 
 router = APIRouter(tags=["report"])
 
 
 @router.post("/report/final")
 def generate_final_report(
+        session_id: int | None = Query(None, description="명시하면 해당 세션 기준, 없으면 최신 세션"),
         db: Session = Depends(get_db),
         user_id: int = Depends(get_current_user)
 ):
-    # 1) 사용자 최신 세션
-    session = (
-        db.query(InterviewSession)
-        .filter_by(user_id=user_id)
-        .order_by(InterviewSession.started_at.desc())
-        .first()
-    )
+    # 1) 세션 결정 (명시 session_id 우선, 소유권 검증 포함)
+    session = resolve_session(db, user_id, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="면접 세션이 없습니다")
 
@@ -150,11 +147,14 @@ def get_report_by_date(
     except ValueError:
         raise HTTPException(status_code=400, detail="날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식을 사용하세요.")
 
+    # started_at은 UTC 저장이므로 KST 하루 구간을 UTC로 환산해 조회
+    day_start, day_end = kst_day_utc_range(target_date)
     session = (
         db.query(InterviewSession)
         .filter(
             InterviewSession.user_id == user_id,
-            func.DATE(InterviewSession.started_at) == target_date
+            InterviewSession.started_at >= day_start,
+            InterviewSession.started_at < day_end,
         )
         .order_by(InterviewSession.started_at.desc())
         .first()

@@ -18,6 +18,7 @@ from app.repository.report import (
 from app.services.interview.plan import FOLLOWUP_ORDERS
 from app.services.report.score_utils import avg_or_zero, find_area_score, normalize_question_type
 from app.services.user.dependencies import get_current_user # 프로젝트에서 사용 중인 인증 의존성
+from app.utils.time_utils import kst_date_expr, kst_day_utc_range, kst_today, to_kst  # UTC 저장 → KST 조회 변환
 
 
 router = APIRouter(tags=["training"])
@@ -38,7 +39,7 @@ def get_daily_average_scores(
     """
 
     # 날짜 단위 컬럼
-    session_date = func.date(InterviewSession.started_at).label("session_date")
+    session_date = kst_date_expr(InterviewSession.started_at).label("session_date")
 
     # 같은 유저-같은 날짜 내 '마지막 세션' 선정을 위한 ROW_NUMBER()
     rn_in_day = func.row_number().over(
@@ -139,7 +140,7 @@ def get_peer_average_scores_up_to_my_days(
     MySQL 8+ (윈도우 함수) 전제.
     """
 
-    session_date = func.date(InterviewSession.started_at).label("session_date")
+    session_date = kst_date_expr(InterviewSession.started_at).label("session_date")
 
     rn_in_day = func.row_number().over(
         partition_by=(InterviewSession.user_id, session_date),
@@ -232,7 +233,7 @@ def get_weekly_training_data(
         db: Session = Depends(get_db),
         user_id: int = Depends(get_current_user)
 ):
-    today = datetime.now().date()
+    today = kst_today()  # 사용자 기준(KST) 오늘
     week_ago = today - timedelta(days=6)
     weekly_data = []
 
@@ -241,12 +242,14 @@ def get_weekly_training_data(
     for i in range(7):
         target_date = week_ago + timedelta(days=i)
 
-        # 해당 날짜의 최신 세션 1건
+        # 해당 KST 날짜의 최신 세션 1건 (UTC 구간으로 환산해 조회)
+        day_start, day_end = kst_day_utc_range(target_date)
         session = (
             db.query(InterviewSession)
             .filter(
                 InterviewSession.user_id == user_id,
-                func.DATE(InterviewSession.started_at) == target_date
+                InterviewSession.started_at >= day_start,
+                InterviewSession.started_at < day_end,
             )
             .order_by(InterviewSession.started_at.desc())
             .first()
@@ -335,21 +338,18 @@ def get_training_day_counters(
             }
         }
 
-    # 3) 사용자 세션의 '날짜'만 distinct로 정렬해 가져온다.
-    #    DATE(started_at)로 그룹핑해 중복 제거.
-    distinct_dates: List[date] = [
-        d[0] for d in (
-            db.query(func.DATE(InterviewSession.started_at))
-            .filter(InterviewSession.user_id == user_id)
-            .group_by(func.DATE(InterviewSession.started_at))
-            .order_by(func.DATE(InterviewSession.started_at).asc())
-            .all()
-        )
-    ]
+    # 3) 사용자 세션의 'KST 날짜'만 distinct로 정렬해 가져온다.
+    #    started_at은 UTC 저장이므로 KST로 변환 후 중복 제거.
+    started_rows = (
+        db.query(InterviewSession.started_at)
+        .filter(InterviewSession.user_id == user_id)
+        .all()
+    )
+    distinct_dates: List[date] = sorted({to_kst(r[0]).date() for r in started_rows})
 
-    # 4) 프로그램 기준 오늘 n일차 = (오늘 - 첫 세션일) + 1
+    # 4) 프로그램 기준 오늘 n일차 = (오늘 - 첫 세션일) + 1  (KST 기준)
     first_date = distinct_dates[0]
-    today = datetime.now().date()
+    today = kst_today()
     program_day_today = (today - first_date).days + 1
 
     # 5) 실제 훈련한 '일수'(중복 제거된 날짜 수)

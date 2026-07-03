@@ -51,6 +51,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 미처리 예외를 CORS 헤더 붙은 명시적 500으로 변환 (Network Error 방지)
+from app.core.error_handlers import register_exception_handlers
+
+register_exception_handlers(app, origins)
+
 # WebSocket 라우터 포함
 app.include_router(audio_router)
 app.include_router(video_router)

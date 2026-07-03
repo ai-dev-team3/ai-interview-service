@@ -17,6 +17,7 @@ from app.repository.interview import InterviewSession
 from app.repository.report import FinalReportSummary
 from app.repository.user import User
 from app.services.user.dependencies import get_current_user
+from app.utils.time_utils import kst_date_expr  # started_at(UTC)을 KST 날짜로 변환
 
 router = APIRouter(tags=["rank"])
 
@@ -277,7 +278,7 @@ def get_job_stats(
         raise HTTPException(status_code=400, detail="사용자의 desired_job 정보를 찾을 수 없습니다.")
 
     # 1) 윈도 컬럼: 캘린더 날짜 + (유저, 날짜)별 마지막 세션 + 유저별 일차
-    session_date = func.date(InterviewSession.started_at).label("session_date")
+    session_date = kst_date_expr(InterviewSession.started_at).label("session_date")
     rn_in_day = func.row_number().over(
         partition_by=(InterviewSession.user_id, session_date),
         order_by=InterviewSession.started_at.desc()

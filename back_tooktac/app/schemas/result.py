@@ -19,6 +19,7 @@ class VideoSummary(BaseModel):
 
 
 class FullResultResponse(BaseModel):
+    status: str = "done"  # processing | done | failed — 프론트 폴링 종료 판단용
     session_id: int
     question_order: int
     question: str = ""

@@ -6,7 +6,8 @@ from app.services.vision.posture_analyzer import PostureAnalyzer, PostureCoreMod
 from app.services.emotion.emotion_analyzer import EmotionAnalyzer, EmotionCoreModel, EmotionSessionState  # 감정 분석기 구성요소
 from app.utils.auth_ws import get_user_id_from_websocket  # WebSocket에서 사용자 인증 정보 추출
 from app.repository.analysis import VideoEvaluationResult  # 결과 저장용 ORM 모델
-from app.repository.interview import InterviewQuestion, InterviewSession  # 세션/질문 ORM
+from app.repository.interview import InterviewQuestion  # 질문 ORM
+from app.services.interview.session_service import resolve_session  # 세션 결정 헬퍼
 from app.repository.database import get_db  # DB 세션 팩토리
 import numpy as np  # 바이트→배열 변환
 import cv2  # 이미지 디코딩
@@ -21,6 +22,53 @@ GLOBAL_EMOTION_CORE = EmotionCoreModel(model_path=os.path.join(os.path.dirname(_
 GLOBAL_POSTURE = PostureAnalyzer(GLOBAL_POSTURE_CORE)  # 포즈 분석기
 GLOBAL_EMOTION = EmotionAnalyzer(GLOBAL_EMOTION_CORE)  # 감정 분석기
 
+def _save_video_result(
+    db: Session,
+    user_id: int,
+    question_order: int,
+    posture_state: "PostureSessionState",
+    emotion_state: "EmotionSessionState",
+    explicit_session_id: int | None = None,
+) -> None:
+    """질문 종료 시점의 누적 상태를 VideoEvaluationResult로 저장 (세션/질문 없으면 스킵)"""
+    final_video = posture_state.finalize()  # 포즈 최종 점수 계산
+    emo_sum = emotion_state.summary()  # 감정 요약 계산
+
+    # 세션 결정 (명시 session_id 우선, 소유권 검증 포함 / 없으면 최신 세션 폴백)
+    session = resolve_session(db, user_id, explicit_session_id)
+    if not session:
+        return  # 세션 없으면 저장 스킵
+
+    # 해당 세션의 question_order에 해당하는 질문 조회
+    question = (
+        db.query(InterviewQuestion)
+        .filter_by(session_id=session.id, question_order=question_order)
+        .first()
+    )
+    if not question:
+        return  # 질문 없으면 저장 스킵
+
+    video_result = VideoEvaluationResult(
+        user_id=user_id,  # 사용자 ID
+        session_id=session.id,  # 세션 ID
+        question_id=question.id,  # 질문 ID
+        question_order=question_order,  # 질문 순번
+        gaze_score=final_video["gaze_rate_score"],  # 정면 응시 점수
+        shoulder_warning=final_video["shoulder_posture_warning_count"],  # 어깨 경고 수
+        hand_warning=final_video["hand_posture_warning_count"],  # 손 경고 수
+        posture_score=final_video["shoulder_hand_score"],  # 어깨+손 합산 점수
+        final_video_score=final_video["video_score"],  # 최종 비디오 점수
+        positive_rate=emo_sum.get("긍정", 0),  # 긍정 비율
+        neutral_rate=emo_sum.get("중립", 0),  # 중립 비율
+        negative_rate=emo_sum.get("부정", 0),  # 부정 비율
+        tense_rate=emo_sum.get("긴장", 0),  # 긴장 비율
+        emotion_best=emo_sum.get("best"),  # 최빈 감정
+        emotion_score=emo_sum.get("score")  # 감정 점수
+    )
+    db.add(video_result)  # DB 세션에 추가
+    db.commit()  # 커밋으로 저장
+
+
 @router.websocket("/ws/expression")
 async def expression_socket(websocket: WebSocket):
     await websocket.accept()  # 클라이언트 WebSocket 연결 수락
@@ -31,6 +79,11 @@ async def expression_socket(websocket: WebSocket):
     # 질문 생명주기 동안만 유지되는 상태 객체 생성
     posture_state = PostureSessionState()  # 포즈 누적 상태
     emotion_state = EmotionSessionState()  # 감정 누적 상태
+
+    # 인증/파라미터 파싱 전에 예외가 나도 except 블록에서 참조 가능하도록 선초기화
+    user_id: int | None = None
+    question_order: int | None = None
+    explicit_session_id: int | None = None
 
     db: Session = next(get_db())  # DB 세션 획득
     try:
@@ -43,6 +96,11 @@ async def expression_socket(websocket: WebSocket):
             return  # 소켓 종료
 
         question_order = int(order_str)  # 정수 변환
+
+        # session_id가 명시되면 해당 세션에 저장 (없으면 최신 세션 폴백)
+        sid_str = websocket.query_params.get("session_id")
+        if sid_str and sid_str.isdigit():
+            explicit_session_id = int(sid_str)
 
         while True:
             data = await websocket.receive_bytes()  # 클라이언트가 전송한 바이너리 프레임 수신
@@ -72,87 +130,14 @@ async def expression_socket(websocket: WebSocket):
             del frame, np_arr, data  # 메모리 회수에 도움
 
     except WebSocketDisconnect:
-        # 연결 종료 시 이 질문의 최종 결과 계산
-        final_video = posture_state.finalize()  # 포즈 최종 점수 계산
-        emo_sum = emotion_state.summary()  # 감정 요약 계산
-
-        # 사용자 최신 세션 조회
-        session = (
-            db.query(InterviewSession)
-            .filter_by(user_id=user_id)
-            .order_by(InterviewSession.started_at.desc())
-            .first()
-        )
-        if not session:
-            return  # 세션 없으면 저장 스킵
-
-        # 해당 세션의 question_order에 해당하는 질문 조회
-        question = (
-            db.query(InterviewQuestion)
-            .filter_by(session_id=session.id, question_order=question_order)
-            .first()
-        )
-        if not question:
-            return  # 질문 없으면 저장 스킵
-
-        # ORM 객체 생성 후 저장
-        video_result = VideoEvaluationResult(
-            user_id=user_id,  # 사용자 ID
-            session_id=session.id,  # 세션 ID
-            question_id=question.id,  # 질문 ID
-            question_order=question_order,  # 질문 순번
-            gaze_score=final_video["gaze_rate_score"],  # 정면 응시 점수
-            shoulder_warning=final_video["shoulder_posture_warning_count"],  # 어깨 경고 수
-            hand_warning=final_video["hand_posture_warning_count"],  # 손 경고 수
-            posture_score=final_video["shoulder_hand_score"],  # 어깨+손 합산 점수
-            final_video_score=final_video["video_score"],  # 최종 비디오 점수
-            positive_rate=emo_sum.get("긍정", 0),  # 긍정 비율
-            neutral_rate=emo_sum.get("중립", 0),  # 중립 비율
-            negative_rate=emo_sum.get("부정", 0),  # 부정 비율
-            tense_rate=emo_sum.get("긴장", 0),  # 긴장 비율
-            emotion_best=emo_sum.get("best"),  # 최빈 감정
-            emotion_score=emo_sum.get("score")  # 감정 점수
-        )
-        db.add(video_result)  # DB 세션에 추가
-        db.commit()  # 커밋으로 저장
+        # 연결 종료 시 이 질문의 최종 결과 저장 (인증/파라미터 확보 전이면 스킵)
+        if user_id is not None and question_order is not None:
+            _save_video_result(db, user_id, question_order, posture_state, emotion_state, explicit_session_id)
 
     except Exception:
-        # 예외 발생 시에도 현재까지 상태로 저장 시도
-        final_video = posture_state.finalize()  # 포즈 최종 점수
-        emo_sum = emotion_state.summary()  # 감정 요약
-
-        session = (
-            db.query(InterviewSession)
-            .filter_by(user_id=user_id)
-            .order_by(InterviewSession.started_at.desc())
-            .first()
-        )
-        if session:
-            question = (
-                db.query(InterviewQuestion)
-                .filter_by(session_id=session.id, question_order=question_order)
-                .first()
-            )
-            if question:
-                video_result = VideoEvaluationResult(
-                    user_id=user_id,
-                    session_id=session.id,
-                    question_id=question.id,
-                    question_order=question_order,
-                    gaze_score=final_video["gaze_rate_score"],
-                    shoulder_warning=final_video["shoulder_posture_warning_count"],
-                    hand_warning=final_video["hand_posture_warning_count"],
-                    posture_score=final_video["shoulder_hand_score"],
-                    final_video_score=final_video["video_score"],
-                    positive_rate=emo_sum.get("긍정", 0),
-                    neutral_rate=emo_sum.get("중립", 0),
-                    negative_rate=emo_sum.get("부정", 0),
-                    tense_rate=emo_sum.get("긴장", 0),
-                    emotion_best=emo_sum.get("best"),
-                    emotion_score=emo_sum.get("score")
-                )
-                db.add(video_result)  # 기록 추가
-                db.commit()  # 저장 커밋
+        # 예외 발생 시에도 현재까지 상태로 저장 시도 (인증 실패 등으로 미확보면 스킵)
+        if user_id is not None and question_order is not None:
+            _save_video_result(db, user_id, question_order, posture_state, emotion_state, explicit_session_id)
 
         # 프론트에 오류 알림(가능하면 마지막으로 시도)
         try:
