@@ -34,10 +34,9 @@ app = FastAPI()
 origins = [
     "http://localhost:3000",   # 개발 환경
     "http://127.0.0.1:3000",   # 개발 환경 (IP 직접접속)
-    "https://tooktac.shop",    # 운영 환경
+    # 운영 환경은 https만 허용 (비TLS origin은 쿠키 탈취 위험)
+    "https://tooktac.shop",
     "https://www.tooktac.shop",
-    "http://tooktac.shop:18080",
-    "http://www.tooktac.shop:18080",
     "https://tooktac.shop:18080",
     "https://www.tooktac.shop:18080",
 ]

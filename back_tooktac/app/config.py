@@ -9,7 +9,8 @@ import os
 
 # --- LLM 관련 ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL_NAME = "gpt-4-turbo"
+# gpt-4-turbo → gpt-4o: 동급 품질에 더 저렴하고 빠름
+OPENAI_MODEL_NAME = "gpt-4o"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
 
