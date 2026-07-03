@@ -64,6 +64,21 @@ def test_full_latest_result_no_session_404(auth_client):
     assert res.status_code == 404
 
 
+def test_full_result_with_explicit_session_id(auth_client, db_session, test_user):
+    """더 최신 세션이 있어도 명시한 session_id 기준으로 조회"""
+    old_session, _ = _seed_full_result(db_session, test_user.id)
+    db_session.add(InterviewSession(user_id=test_user.id))  # 더 최신 빈 세션
+    db_session.commit()
+
+    res = auth_client.get("/result/full/latest", params={"session_id": old_session.id})
+    assert res.status_code == 200
+    assert res.json()["session_id"] == old_session.id
+
+    # 명시 없이 조회하면 최신 세션(질문 없음) → 404
+    res = auth_client.get("/result/full/latest")
+    assert res.status_code == 404
+
+
 def test_full_latest_result_requires_auth(client):
     res = client.get("/result/full/latest")
     assert res.status_code == 401

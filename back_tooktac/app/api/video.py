@@ -6,7 +6,8 @@ from app.services.vision.posture_analyzer import PostureAnalyzer, PostureCoreMod
 from app.services.emotion.emotion_analyzer import EmotionAnalyzer, EmotionCoreModel, EmotionSessionState  # 감정 분석기 구성요소
 from app.utils.auth_ws import get_user_id_from_websocket  # WebSocket에서 사용자 인증 정보 추출
 from app.repository.analysis import VideoEvaluationResult  # 결과 저장용 ORM 모델
-from app.repository.interview import InterviewQuestion, InterviewSession  # 세션/질문 ORM
+from app.repository.interview import InterviewQuestion  # 질문 ORM
+from app.services.interview.session_service import resolve_session  # 세션 결정 헬퍼
 from app.repository.database import get_db  # DB 세션 팩토리
 import numpy as np  # 바이트→배열 변환
 import cv2  # 이미지 디코딩
@@ -32,6 +33,8 @@ async def expression_socket(websocket: WebSocket):
     posture_state = PostureSessionState()  # 포즈 누적 상태
     emotion_state = EmotionSessionState()  # 감정 누적 상태
 
+    explicit_session_id: int | None = None  # 예외 시 except 블록에서도 참조되므로 선초기화
+
     db: Session = next(get_db())  # DB 세션 획득
     try:
         user_id = await get_user_id_from_websocket(websocket)  # 쿠키/JWT 등에서 사용자 ID 추출
@@ -43,6 +46,11 @@ async def expression_socket(websocket: WebSocket):
             return  # 소켓 종료
 
         question_order = int(order_str)  # 정수 변환
+
+        # session_id가 명시되면 해당 세션에 저장 (없으면 최신 세션 폴백)
+        sid_str = websocket.query_params.get("session_id")
+        if sid_str and sid_str.isdigit():
+            explicit_session_id = int(sid_str)
 
         while True:
             data = await websocket.receive_bytes()  # 클라이언트가 전송한 바이너리 프레임 수신
@@ -76,13 +84,8 @@ async def expression_socket(websocket: WebSocket):
         final_video = posture_state.finalize()  # 포즈 최종 점수 계산
         emo_sum = emotion_state.summary()  # 감정 요약 계산
 
-        # 사용자 최신 세션 조회
-        session = (
-            db.query(InterviewSession)
-            .filter_by(user_id=user_id)
-            .order_by(InterviewSession.started_at.desc())
-            .first()
-        )
+        # 세션 결정 (명시 session_id 우선, 소유권 검증 포함)
+        session = resolve_session(db, user_id, explicit_session_id)
         if not session:
             return  # 세션 없으면 저장 스킵
 
@@ -121,12 +124,7 @@ async def expression_socket(websocket: WebSocket):
         final_video = posture_state.finalize()  # 포즈 최종 점수
         emo_sum = emotion_state.summary()  # 감정 요약
 
-        session = (
-            db.query(InterviewSession)
-            .filter_by(user_id=user_id)
-            .order_by(InterviewSession.started_at.desc())
-            .first()
-        )
+        session = resolve_session(db, user_id, explicit_session_id)
         if session:
             question = (
                 db.query(InterviewQuestion)

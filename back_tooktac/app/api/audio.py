@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from app.repository.interview import InterviewAnswer, InterviewQuestion, InterviewSession
+from app.repository.interview import InterviewAnswer, InterviewQuestion
+from app.services.interview.session_service import resolve_session
 from app.services.feedback.speechfeedback import SpeechFeedbackGenerator
 from app.services.speech.speech_analyzer import SpeechAnalyzer
 from app.services.stt.stt_service import STTService
@@ -57,16 +58,15 @@ async def websocket_endpoint(websocket: WebSocket):
             return
         question_order = int(qorder_str)
 
+        # 2-1) session_id가 명시되면 해당 세션 사용 (없으면 최신 세션 폴백)
+        sid_str = websocket.query_params.get("session_id")
+        explicit_session_id = int(sid_str) if sid_str and sid_str.isdigit() else None
+
         # 3) DB 세션
         db = SessionLocal()
 
-        # 4) 사용자 최신 세션 조회
-        session = (
-            db.query(InterviewSession)
-            .filter(InterviewSession.user_id == user_id)
-            .order_by(InterviewSession.started_at.desc())
-            .first()
-        )
+        # 4) 세션 결정 (명시 session_id 우선, 소유권 검증 포함)
+        session = resolve_session(db, user_id, explicit_session_id)
         if not session:
             await websocket.send_json({"error": "세션을 찾을 수 없습니다."})
             return

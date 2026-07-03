@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { getInterviewSessionId } from "@/api/api";
 
 interface UseExpressionSocketProps {
     isAnswerActive: boolean;
@@ -21,8 +22,10 @@ export function useExpressionSocket({ isAnswerActive, questionId, setGazeActive,
         const video = document.getElementById("webcam-video") as HTMLVideoElement;
 
         if (isAnswerActive && video) {
+            const sessionId = getInterviewSessionId();
+            const sessionQuery = sessionId ? `&session_id=${sessionId}` : "";
             socket = new WebSocket(
-                `${process.env.NEXT_PUBLIC_EXPRESSION_WS_URL || "wss://tooktac.shop:10443/api/ws/expression"}?question_id=${questionId}`
+                `${process.env.NEXT_PUBLIC_EXPRESSION_WS_URL || "wss://tooktac.shop:10443/api/ws/expression"}?question_id=${questionId}${sessionQuery}`
             );
 
             socket.onopen = () => {
