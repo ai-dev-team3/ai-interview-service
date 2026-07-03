@@ -58,20 +58,18 @@ class VitoSpeechClient:
             'Authorization': f'Bearer {self.jwt_token}'
         }
 
-        files = {
-            'file': open(file_path, 'rb')
-        }
-
         data = {
             'config': json.dumps(config)
         }
 
-        response = requests.post(
-            f"{self.base_url}/transcribe",
-            headers=headers,
-            data=data,
-            files=files
-        )
+        # 파일 핸들을 닫지 않으면 Windows에서 임시 파일 삭제가 실패할 수 있음
+        with open(file_path, 'rb') as audio_file:
+            response = requests.post(
+                f"{self.base_url}/transcribe",
+                headers=headers,
+                data=data,
+                files={'file': audio_file}
+            )
         response.raise_for_status()
 
         result = response.json()
@@ -96,12 +94,12 @@ class VitoSpeechClient:
         logger.debug("전사 결과: %s", result)
         return result
 
-    def get_full_text_from_file(self, file_path: str, retry: int = 10, delay: int = 3) -> str:
+    def get_full_text_from_file(self, file_path: str, retry: int = 30, delay: int = 1) -> str:
         """
         파일을 업로드하고 전사 완료까지 대기한 후 전체 텍스트를 반환
         :param file_path: 음성 파일 경로
         :param retry: 최대 시도 횟수
-        :param delay: 각 시도 사이 대기 시간 (초)
+        :param delay: 각 시도 사이 대기 시간 (초) — 짧은 답변의 대기 시간을 줄이기 위해 1초 간격 폴링
         :return: 전사된 전체 텍스트 문자열
         """
         # 1. 파일 업로드 및 transcribe_id 생성

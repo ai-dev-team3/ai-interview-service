@@ -1,41 +1,22 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.repository.interview import InterviewAnswer, InterviewQuestion, InterviewSession
-from app.services.feedback.speechfeedback import SpeechFeedbackGenerator
-from app.services.speech.speech_analyzer import SpeechAnalyzer
-from app.services.stt.stt_service import STTService
+from app.services.speech.answer_pipeline import (
+    AnswerAnalysisPipeline,
+    AudioConversionError,
+    FfmpegNotFoundError,
+)
 from app.utils.auth_ws import get_user_id_from_websocket
 import logging
 import tempfile
 import os
 import asyncio
-import subprocess
-import threading
 from app.repository.database import SessionLocal
-from app.services.text.orchestrator import EvaluationOrchestrator
 from app.repository.analysis import EvaluationResult
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# 전역 싱글턴 저장소와 락
-_EVAL_ORCH_SINGLETON = None
-_EVAL_ORCH_LOCK = threading.Lock()
-
-def get_orchestrator_singleton():
-    """
-    EvaluationOrchestrator를 프로세스 내에서 1회만 생성하고 재사용한다.
-    멀티 쓰레드 환경에서 안전하게 최초 1회만 생성되도록 Lock을 사용한다.
-    """
-    global _EVAL_ORCH_SINGLETON
-    if _EVAL_ORCH_SINGLETON is None:
-        with _EVAL_ORCH_LOCK:
-            if _EVAL_ORCH_SINGLETON is None:
-                # 필요 시 환경변수/키 전달 가능
-                # 예: EvaluationOrchestrator(api_key=os.getenv("OPENAI_API_KEY"))
-                _EVAL_ORCH_SINGLETON = EvaluationOrchestrator()
-    return _EVAL_ORCH_SINGLETON
 
 
 @router.websocket("/ws/transcript")
@@ -98,22 +79,25 @@ async def websocket_endpoint(websocket: WebSocket):
             os.fsync(f.fileno())
             webm_path = f.name
 
-        await asyncio.sleep(0.1)
         wav_path = webm_path.replace(".webm", ".wav")
 
+        pipeline = AnswerAnalysisPipeline()
+
         # 8) ffmpeg 변환
-        cmd = ["ffmpeg", "-i", webm_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path, "-y", "-loglevel", "error"]
-        # 동기 호출을 그대로 두면 이벤트 루프가 멈춰 다른 요청/웹소켓이 전부 대기함 → 워커 스레드로 위임
-        proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
-        if proc.returncode != 0:
+        try:
+            await pipeline.convert_webm_to_wav(webm_path, wav_path)
+        except FfmpegNotFoundError:
+            logger.error("ffmpeg를 찾을 수 없습니다. 서버에 ffmpeg 설치가 필요합니다 (README 참고).")
+            _save_minimal_result(db, user_id, session.id, question, reason="ffmpeg 미설치")
+            await websocket.send_json({"transcript": "", "feedback": _empty_feedback("서버 오디오 변환 도구(ffmpeg)가 설치되어 있지 않습니다.")})
+            return
+        except AudioConversionError:
             _save_minimal_result(db, user_id, session.id, question, reason="ffmpeg 변환 실패")
             await websocket.send_json({"transcript": "", "feedback": _empty_feedback("ffmpeg 변환 실패")})
             return
 
         # 9) STT (Clova)
-        clova = STTService(stt_type="clova")
-        clova_text, clova_raw = await asyncio.to_thread(clova.transcribe, wav_path)
-        text_clean = (clova_text or "").strip()
+        text_clean, clova_raw = await pipeline.transcribe(wav_path)
 
         if text_clean == "":
             _save_answer(db, session.id, question, user_id, "")
@@ -121,37 +105,19 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_json({"transcript": "", "feedback": _empty_feedback("음성 인식이 되지 않았습니다.")})
             return
 
-        # 10) 답변 저장 후 추가 STT(Vito) 및 음성 분석
+        # 10) 답변 저장 후 Vito STT·pitch 분석·LLM 평가 병렬 실행
         _save_answer(db, session.id, question, user_id, text_clean)
 
-        vito = STTService(stt_type="vito")
-        vito_text, _ = await asyncio.to_thread(vito.transcribe, wav_path)
-
-        analyzer = SpeechAnalyzer(clova_raw)
-        speed = analyzer.speech_speed_calculate()
-        # librosa pitch 분석은 CPU 연산이 큼 → 워커 스레드로 위임
-        pitch = await asyncio.to_thread(analyzer.calculate_pitch_variation, wav_path)
-        fillers = analyzer.find_filler_words(vito_text)
-
-        sf = SpeechFeedbackGenerator(speed, pitch, fillers).generate_feedback()
+        sf, ev = await pipeline.analyze_and_evaluate(
+            wav_path, clova_raw, text_clean,
+            question.question_text, question.question_type,
+        )
         labels = sf.get("labels", {}) or {}
         score_detail = sf.get("score_detail", {}) or {}
         total_score = sf.get("total_score", 0) or 0
-        logger.debug("Clova STT 변환 텍스트: %s", clova_text)
-        logger.debug("클린 텍스트: %s", text_clean)
-        logger.debug("Vito STT 변환 텍스트: %s", vito_text)
 
-        # 11) 텍스트 평가 (LLM)
-        try:
-            # orchestrator = EvaluationOrchestrator()
-            # ev = orchestrator.evaluate_answer(question.question_text, text_clean, question.question_type)
-            # 변경:
-            orchestrator = get_orchestrator_singleton()
-            ev = await asyncio.to_thread(
-                orchestrator.evaluate_answer,
-                question.question_text, text_clean, question.question_type
-            )
-        except Exception:
+        # 11) LLM 평가 실패 시 음성 분석 결과만이라도 저장
+        if ev is None:
             _save_minimal_result(
                 db, user_id, session.id, question,
                 reason="LLM 평가 실패",
