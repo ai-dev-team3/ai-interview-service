@@ -23,13 +23,14 @@ export default function QuestionClientLoadingPage({ questionId }: Props) {
         const hasModelAnswer =
           typeof data?.model_answer === 'string' && data.model_answer.trim().length > 0;
 
-        if (hasModelAnswer) {
+        // 백엔드가 분석 실패(failed)를 알려주면 무한 폴링하지 않고 현재 결과로 표시
+        if (hasModelAnswer || data?.status === 'failed') {
           if (!cancelled) {
             setResultData(data);
             clearInterval(interval);
           }
         }
-        // 준비 안 되었으면 그냥 다음 interval에서 재시도
+        // 준비 안 되었으면(processing) 그냥 다음 interval에서 재시도
       } catch (err: any) {
         // 404는 아직 준비 전이니 무시하고 재시도
         if (err?.response?.status !== 404) {

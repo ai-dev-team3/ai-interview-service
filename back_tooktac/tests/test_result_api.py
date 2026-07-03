@@ -48,6 +48,7 @@ def test_full_latest_result(auth_client, db_session, test_user):
     res = auth_client.get("/result/full/latest")
     assert res.status_code == 200
     body = res.json()
+    assert body["status"] == "done"
     assert body["session_id"] == session.id
     assert body["question"] == "자기소개 해주세요"
     assert body["user_answer"] == "안녕하세요"
@@ -62,6 +63,48 @@ def test_full_latest_result(auth_client, db_session, test_user):
 def test_full_latest_result_no_session_404(auth_client):
     res = auth_client.get("/result/full/latest")
     assert res.status_code == 404
+
+
+def test_full_latest_result_status_processing(auth_client, db_session, test_user):
+    """평가 결과가 아직 없으면 status=processing"""
+    session = InterviewSession(user_id=test_user.id)
+    db_session.add(session)
+    db_session.flush()
+    db_session.add(InterviewQuestion(
+        session_id=session.id, question_order=1,
+        question_text="질문", question_type="개념설명형",
+    ))
+    db_session.commit()
+
+    res = auth_client.get("/result/full/latest")
+    assert res.status_code == 200
+    assert res.json()["status"] == "processing"
+
+
+def test_full_latest_result_status_failed(auth_client, db_session, test_user):
+    """최소 기록(model_answer 빈 값)만 있으면 status=failed"""
+    session = InterviewSession(user_id=test_user.id)
+    db_session.add(session)
+    db_session.flush()
+    question = InterviewQuestion(
+        session_id=session.id, question_order=1,
+        question_text="질문", question_type="개념설명형",
+    )
+    db_session.add(question)
+    db_session.flush()
+    db_session.add(EvaluationResult(
+        user_id=test_user.id, session_id=session.id, question_id=question.id,
+        question_order=1, similarity=0.0, intent_score=0.0, knowledge_score=0.0,
+        final_text_score=0, model_answer="", strengths="음성 인식 불가",
+        improvements="", final_feedback="", speed_score=0, filler_score=0,
+        pitch_score=0, final_speech_score=0,
+        speed_label="없음", fluency_label="없음", tone_label="없음",
+    ))
+    db_session.commit()
+
+    res = auth_client.get("/result/full/latest")
+    assert res.status_code == 200
+    assert res.json()["status"] == "failed"
 
 
 def test_full_latest_result_requires_auth(client):

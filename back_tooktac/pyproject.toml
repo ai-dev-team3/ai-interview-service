@@ -46,6 +46,7 @@ dependencies = [
     "requests>=2.32.4",
     "httpx>=0.28.1",
     "alembic>=1.18.5",
+    "bcrypt>=5.0.0",
 ]
 
 [tool.uv]
