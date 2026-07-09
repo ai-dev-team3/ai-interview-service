@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Form, Depends, HTTPException, Response, Query, Request
+from fastapi import APIRouter, Form, Depends, HTTPException, Response, Query
 from sqlalchemy.orm import Session
-from app.config import ACCESS_TOKEN_EXPIRE_MINUTES
+from app import config
 from app.repository.database import get_db
 from app.services.user.login_service import authenticate_user
 from app.services.user.dependencies import get_current_user
@@ -8,35 +8,21 @@ from app.repository.user import User
 
 router = APIRouter()
 
-def _set_access_cookie(response: Response, origin: str, value: str, max_age: int):
+def _set_access_cookie(response: Response, value: str, max_age: int):
     """login/logout이 같은 속성으로 쿠키를 굽도록 통일 (속성이 다르면 삭제가 안 됨)"""
-    if "tooktac.shop" in origin:
-        # production (tooktac.shop)
-        response.set_cookie(
-            key="access_token",
-            value=value,
-            httponly=True,
-            secure=True,
-            samesite="none",
-            path="/",
-            domain=".tooktac.shop",
-            max_age=max_age,
-        )
-    else:
-        # local development (localhost:3000)
-        response.set_cookie(
-            key="access_token",
-            value=value,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            path="/",
-            max_age=max_age,
-        )
+    response.set_cookie(
+        key="access_token",
+        value=value,
+        httponly=True,
+        secure=config.COOKIE_SECURE,
+        samesite=config.COOKIE_SAMESITE,
+        path="/",
+        domain=config.COOKIE_DOMAIN,
+        max_age=max_age,
+    )
 
 @router.post("/login")
 def login(
-    request: Request,
     response: Response,
     username: str = Form(...),
     password: str = Form(...),
@@ -46,19 +32,17 @@ def login(
     if not token_data:
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
-    origin = request.headers.get("origin", "")
     _set_access_cookie(
-        response, origin,
+        response,
         value=token_data["access_token"],
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
     return {"message": "로그인 성공"}
 
 @router.post("/logout")
-def logout(request: Request, response: Response):
-    origin = request.headers.get("origin", "")
-    _set_access_cookie(response, origin, value="", max_age=0)
+def logout(response: Response):
+    _set_access_cookie(response, value="", max_age=0)
     return {"message": "로그아웃 완료"}
 
 @router.get("/me")
