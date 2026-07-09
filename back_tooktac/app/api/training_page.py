@@ -270,7 +270,6 @@ def get_weekly_training_data(
             "text": find_area_score(area_scores, "text"),
             "voice": find_area_score(area_scores, "voice"),
             "video": find_area_score(area_scores, "video"),
-            "emotion": find_area_score(area_scores, "emotion"),
         }
 
         # 질문유형별 평균 점수

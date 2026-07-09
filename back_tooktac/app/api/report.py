@@ -181,7 +181,6 @@ def get_report_by_date(
                 "text": find_area_score(area_scores, "text"),
                 "voice": find_area_score(area_scores, "voice"),
                 "video": find_area_score(area_scores, "video"),
-                "emotion": find_area_score(area_scores, "emotion"),
             },
             "topStrengths": [s.description for s in strengths],
             "improvements": [i.description for i in improvements],

@@ -43,12 +43,11 @@ AREA_NAME_MAP = {
     "text": ["답변 내용", "텍스트", "text"],
     "voice": ["음성", "voice"],
     "video": ["영상", "video"],
-    "emotion": ["감정", "emotion"],
 }
 
 
 def find_area_score(area_scores, key: str) -> int:
-    """ReportAreaScore 목록에서 key(text/voice/video/emotion) 영역 점수 추출"""
+    """ReportAreaScore 목록에서 key(text/voice/video) 영역 점수 추출"""
     names = set(a.lower() for a in AREA_NAME_MAP[key])
     for area in area_scores:
         if (area.area_name or "").lower() in names:

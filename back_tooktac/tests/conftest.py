@@ -2,7 +2,7 @@
 
 - 테스트용 DB: 실 DB와 분리된 `{DB_NAME}_test` (또는 TEST_DB_NAME 환경변수)
 - 각 테스트 후 모든 테이블을 비워 테스트 간 격리 보장
-- 앱은 ML 라우터(audio/video)를 제외하고 구성 → torch/YOLO/MediaPipe 로드 없이 빠르게 실행
+- 앱은 ML 라우터(audio/video)를 제외하고 구성 → torch/MediaPipe 로드 없이 빠르게 실행
 """
 import os
 

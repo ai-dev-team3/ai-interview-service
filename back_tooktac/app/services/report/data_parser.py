@@ -216,7 +216,7 @@ class DataParser:
 
     def validate_detail_analysis(self, detail_analysis: Dict) -> bool:
         """상세 분석 데이터 구조 검증"""
-        required_areas = ['text', 'voice', 'video', 'emotion']
+        required_areas = ['text', 'voice', 'video']
 
         for area in required_areas:
             if area not in detail_analysis:

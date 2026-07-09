@@ -21,7 +21,7 @@ class QuestionAnalysis:
     question: str
     my_answer: str
     model_answer: str
-    detail_analysis: Dict[str, Dict[str, float]]  # text, voice, video, emotion
+    detail_analysis: Dict[str, Dict[str, float]]  # text, voice, video
     feedback: str
     strengths: List[str]
     improvements: List[str]

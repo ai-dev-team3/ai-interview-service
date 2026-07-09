@@ -34,9 +34,7 @@ def _seed_full_result(db, user_id):
     db.add(VideoEvaluationResult(
         user_id=user_id, session_id=session.id, question_id=question.id,
         question_order=1, gaze_score=90, shoulder_warning=1, hand_warning=0,
-        posture_score=85, final_video_score=88, positive_rate=60,
-        neutral_rate=30, negative_rate=5, tense_rate=5,
-        emotion_best="긍정", emotion_score=75,
+        posture_score=85, final_video_score=88,
     ))
     db.commit()
     return session, question
@@ -56,7 +54,6 @@ def test_full_latest_result(auth_client, db_session, test_user):
     assert body["strengths"] == ["강점1"]
     assert body["labels"]["speed"] == "적절"
     assert body["video"]["gaze_score"] == 90
-    assert body["best_emotion"] == "긍정"
     assert isinstance(body["weighted_score"], (int, float))
 
 

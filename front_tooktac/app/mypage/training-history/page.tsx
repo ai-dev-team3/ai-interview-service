@@ -37,7 +37,7 @@ ChartJS.register(
 );
 
 // 키 타입 정의
-type AreaKey = 'text' | 'voice' | 'video' | 'emotion';
+type AreaKey = 'text' | 'voice' | 'video';
 type QuestionKey = 'concept' | 'technical' | 'situation' | 'behavior' | 'followUp';
 
 type DayCounters = {
@@ -114,52 +114,6 @@ const CHART_COLORS = {
   background: '#e7f8ff',
   white: '#ffffff'
 };
-
-// 개선된 더미데이터 (현실적인 성장 스토리)
-// const getImprovedWeeklyData = (): WeeklyDataItem[] => [
-//   {
-//     date: '07/28', fullDate: '2025-07-28', day: '월', score: 64,
-//     areas: { text: 62, voice: 58, video: 60, emotion: 76 },
-//     questionTypes: { concept: 65, technical: 60, situation: 58, behavior: 72, followUp: 60 },
-//     routineAchieved: true
-//   },
-//   {
-//     date: '07/29', fullDate: '2025-07-29', day: '화', score: 67,
-//     areas: { text: 65, voice: 61, video: 63, emotion: 78 },
-//     questionTypes: { concept: 68, technical: 63, situation: 61, behavior: 74, followUp: 63 },
-//     routineAchieved: true
-//   },
-//   {
-//     date: '07/30', fullDate: '2025-07-30', day: '수', score: 73,
-//     areas: { text: 71, voice: 68, video: 70, emotion: 82 },
-//     questionTypes: { concept: 74, technical: 70, situation: 67, behavior: 79, followUp: 68 },
-//     routineAchieved: true
-//   },
-//   {
-//     date: '07/31', fullDate: '2025-07-31', day: '목', score: 76,
-//     areas: { text: 74, voice: 72, video: 73, emotion: 84 },
-//     questionTypes: { concept: 77, technical: 74, situation: 70, behavior: 82, followUp: 72 },
-//     routineAchieved: true
-//   },
-//   {
-//     date: '08/01', fullDate: '2025-08-01', day: '금', score: 78,
-//     areas: { text: 76, voice: 74, video: 75, emotion: 86 },
-//     questionTypes: { concept: 79, technical: 76, situation: 72, behavior: 84, followUp: 74 },
-//     routineAchieved: true
-//   },
-//   {
-//     date: '08/02', fullDate: '2025-08-02', day: '토', score: 82,
-//     areas: { text: 80, voice: 78, video: 79, emotion: 89 },
-//     questionTypes: { concept: 83, technical: 80, situation: 76, behavior: 87, followUp: 78 },
-//     routineAchieved: true
-//   },
-//   {
-//     date: '08/03', fullDate: '2025-08-03', day: '일', score: 85,
-//     areas: { text: 83, voice: 82, video: 82, emotion: 92 },
-//     questionTypes: { concept: 86, technical: 84, situation: 80, behavior: 90, followUp: 82 },
-//     routineAchieved: true
-//   }
-// ];
 
 // 상위 50% 평균 점수 더미 데이터 (들쑥날쑥한 변동)
 const getAverageScoresData = (n: number): number[] => [68, 71, 69, 74, 70, 73, 72].slice(0, n);
@@ -558,64 +512,6 @@ export default function TrainingHistory() {
     return { lineData: data, lineOptions: options };
   }, [weeklyData, TARGET_SCORE, emptyLineData, emptyLineOptions, peerAverages]);
 
-  // 레이더 차트 (영역별)
-  // const { areasData, areasOptions }: { areasData: ChartData<'radar'>; areasOptions: ChartOptions<'radar'> } = useMemo(() => {
-  //   if (weeklyData.length === 0) {
-  //     return { areasData: emptyRadarData, areasOptions: emptyRadarOptions };
-  //   }
-  //   const day1 = weeklyData[0];
-  //   const day7 = weeklyData[weeklyData.length - 1];
-
-  //   const data: ChartData<'radar'> = {
-  //     labels: ['답변내용', '음성', '영상', '감정'],
-  //     datasets: [
-  //       {
-  //         label: '1일차',
-  //         data: [day1.areas.text, day1.areas.voice, day1.areas.video, day1.areas.emotion],
-  //         borderColor: '#1e3a8a',
-  //         backgroundColor: '#1e3a8a25',
-  //         borderWidth: 3,
-  //         pointBackgroundColor: '#1e3a8a',
-  //         pointBorderColor: CHART_COLORS.white,
-  //         pointBorderWidth: 3
-  //       },
-  //       {
-  //         label: '7일차',
-  //         data: [day7.areas.text, day7.areas.voice, day7.areas.video, day7.areas.emotion],
-  //         borderColor: '#6ce5e8',
-  //         backgroundColor: '#6ce5e830',
-  //         borderWidth: 3,
-  //         pointBackgroundColor: '#6ce5e8',
-  //         pointBorderColor: CHART_COLORS.white,
-  //         pointBorderWidth: 3
-  //       }
-  //     ]
-  //   };
-
-  //   const options: ChartOptions<'radar'> = {
-  //     responsive: true,
-  //     maintainAspectRatio: false,
-  //     plugins: {
-  //       legend: {
-  //         position: 'bottom',
-  //         labels: { boxWidth: 12, padding: 15, font: { size: 11 } }
-  //       }
-  //     },
-  //     scales: {
-  //       r: {
-  //         angleLines: { color: '#e2e8f0' },
-  //         grid: { color: '#e2e8f0' },
-  //         pointLabels: { color: '#374151', font: { size: 11 } },
-  //         ticks: { display: false },
-  //         min: 50,
-  //         max: 100
-  //       }
-  //     }
-  //   };
-
-  //   return { areasData: data, areasOptions: options };
-  // }, [weeklyData, emptyRadarData, emptyRadarOptions]);
-
   // // 레이더 차트 (질문유형별)
   // const { questionData, questionOptions }: { questionData: ChartData<'radar'>; questionOptions: ChartOptions<'radar'> } =
   //   useMemo(() => {
@@ -709,7 +605,7 @@ export default function TrainingHistory() {
     const datasets: ChartData<'radar'>['datasets'] = [
       {
         label: firstLabel,
-        data: [first.areas.text, first.areas.voice, first.areas.video, first.areas.emotion],
+        data: [first.areas.text, first.areas.voice, first.areas.video],
         borderColor: '#1e3a8a',
         backgroundColor: '#1e3a8a25',
         borderWidth: 3,
@@ -722,7 +618,7 @@ export default function TrainingHistory() {
     if (weeklyData.length > 1) {
       datasets.push({
         label: lastLabel,
-        data: [last.areas.text, last.areas.voice, last.areas.video, last.areas.emotion],
+        data: [last.areas.text, last.areas.voice, last.areas.video],
         borderColor: '#6ce5e8',
         backgroundColor: '#6ce5e830',
         borderWidth: 3,
@@ -732,7 +628,7 @@ export default function TrainingHistory() {
       });
     }
     const data: ChartData<'radar'> = {
-      labels: ['답변내용', '음성', '영상', '감정'],
+      labels: ['답변내용', '음성', '영상'],
       datasets
     };
 
@@ -883,8 +779,8 @@ export default function TrainingHistory() {
   const getTopStrength = () => {
     if (weeklyData.length === 0) return '데이터 로딩 중';
     const latestData = weeklyData[weeklyData.length - 1];
-    const areas: AreaKey[] = ['text', 'voice', 'video', 'emotion'];
-    const areaNames = ['답변 구성', '음성 전달', '시선 처리', '감정 표현'];
+    const areas: AreaKey[] = ['text', 'voice', 'video'];
+    const areaNames = ['답변 구성', '음성 전달', '시선 처리'];
 
     const maxArea = areas.reduce<AreaKey>(
       (max, area) => (latestData.areas[area] > latestData.areas[max] ? area : max),
@@ -897,8 +793,8 @@ export default function TrainingHistory() {
   const getWeakestArea = () => {
     if (weeklyData.length === 0) return '데이터 로딩 중';
     const latestData = weeklyData[weeklyData.length - 1];
-    const areas: AreaKey[] = ['text', 'voice', 'video', 'emotion'];
-    const areaNames = ['답변 구성', '음성 전달', '시선 처리', '감정 표현'];
+    const areas: AreaKey[] = ['text', 'voice', 'video'];
+    const areaNames = ['답변 구성', '음성 전달', '시선 처리'];
 
     const minArea = areas.reduce<AreaKey>(
       (min, area) => (latestData.areas[area] < latestData.areas[min] ? area : min),
@@ -1291,7 +1187,7 @@ export default function TrainingHistory() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="bg-[#f8fafc] rounded-xl p-4 text-center">
                   <div className="text-2xl font-bold text-[#27386d] mb-1">{selectedReport.areas.text}</div>
                   <div className="text-sm text-gray-600">답변 내용</div>
@@ -1303,10 +1199,6 @@ export default function TrainingHistory() {
                 <div className="bg-[#f8fafc] rounded-xl p-4 text-center">
                   <div className="text-2xl font-bold text-[#27386d] mb-1">{selectedReport.areas.video}</div>
                   <div className="text-sm text-gray-600">영상</div>
-                </div>
-                <div className="bg-[#f8fafc] rounded-xl p-4 text-center">
-                  <div className="text-2xl font-bold text-[#27386d] mb-1">{selectedReport.areas.emotion}</div>
-                  <div className="text-sm text-gray-600">감정</div>
                 </div>
               </div>
 

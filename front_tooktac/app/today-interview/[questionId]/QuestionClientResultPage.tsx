@@ -24,7 +24,6 @@ type EvaluationResult = {
         shoulder_warning: number | null;
         hand_warning: number | null;
     };
-    best_emotion: string | null;
     weighted_score: number;
 };
 
@@ -53,9 +52,8 @@ export default function QuestionClientResultPage({ result, nextLink }: Props ) {
         }
     }
 
-    // 현재 점수와 감정 상태 (임시 데이터)
+    // 현재 점수 (임시 데이터)
     const currentScore = result?.weighted_score ?? 0;
-    const currentEmotion = result?.best_emotion ?? "분석중"; // "긍정적", "무표정", "긴장됨", "부정적"
 
     // 음성 분석 데이터 (임시)
     const voiceAnalysis = {
@@ -232,37 +230,6 @@ export default function QuestionClientResultPage({ result, nextLink }: Props ) {
         return "시작이 반이에요. 한걸음씩 함께 노력해요!";
     };
 
-    // 감정별 아이콘과 메시지 함수
-    const getEmotionData = (emotion: string) => {
-        switch (emotion) {
-            case "긍정":
-                return {
-                    icon: "ri-emotion-happy-line",
-                    message: "자신감 있고 긍정적인 표정이네요!"
-                };
-            case "중립":
-                return {
-                    icon: "ri-emotion-normal-line",
-                    message: "표정에 생기를 넣어볼까요?"
-                };
-            case "긴장":
-                return {
-                    icon: "ri-emotion-sad-line",
-                    message: "조금 더 편하게 답변해도 괜찮아요."
-                };
-            case "부정":
-                return {
-                    icon: "ri-emotion-unhappy-line",
-                    message: "다음 질문에는 웃으며 답변해주세요!"
-                };
-            default:
-                return {
-                    icon: "ri-emotion-normal-line",
-                    message: "감정을 분석중입니다."
-                };
-        }
-    };
-
     // 단계 정의
     const steps = [
         '아이스브레이킹',
@@ -420,24 +387,6 @@ export default function QuestionClientResultPage({ result, nextLink }: Props ) {
                         <div className="text-center">
                             <div className="text-4xl font-bold text-[#27386d] mb-2">{currentScore}/100</div>
                             <div className="text-sm text-gray-600">{getScoreMessage(currentScore)}</div>
-                        </div>
-                    </div>
-
-                    {/* 감정 분석 */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-[#27386d]">감정 분석</h3>
-                            <div className="w-8 h-8 bg-[#6ce5e8] rounded-full flex items-center justify-center">
-                                <i className="ri-emotion-happy-line text-lg text-[#27386d]"></i>
-                            </div>
-                        </div>
-                        <div className="text-center">
-                            <div
-                                className="text-2xl font-bold text-[#27386d] mb-2 flex items-center justify-center space-x-2">
-                                <i className={`${getEmotionData(currentEmotion).icon} text-[#6ce5e8] text-3xl`}></i>
-                                <span>{currentEmotion}</span>
-                            </div>
-                            <div className="text-sm text-gray-600">{getEmotionData(currentEmotion).message}</div>
                         </div>
                     </div>
 

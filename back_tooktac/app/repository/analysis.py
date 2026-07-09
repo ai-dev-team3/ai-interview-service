@@ -71,13 +71,6 @@ class VideoEvaluationResult(Base):
     posture_score = Column(Integer)
     final_video_score = Column(Integer)
 
-    positive_rate = Column(Integer)  # 긍정 %
-    neutral_rate = Column(Integer)  # 중립 %
-    negative_rate = Column(Integer)  # 부정 %
-    tense_rate = Column(Integer)  # 긴장 %
-    emotion_best = Column(String(20))  # 가장 높은 감정
-    emotion_score = Column(Integer)  # 감정 총점
-
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # 관계 설정

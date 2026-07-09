@@ -29,7 +29,6 @@ export type FinalReportResponse = {
       text: { total: number; similarity: number; accuracy: number; understanding: number };
       voice: { total: number; speed: number; fluency: number; tone: number };
       video: { total: number; gaze_rate: number; posture: number };
-      emotion: { total: number; positive: number; neutral: number; nervous: number; negative: number };
     };
     questionScores: {
       name: string;
@@ -96,7 +95,6 @@ export default function FinalEvaluationPage() {
     { subject: '답변 내용', score: evaluationData.areaScores.text.total, fullMark: 100 },
     { subject: '음성', score: evaluationData.areaScores.voice.total, fullMark: 100 },
     { subject: '영상', score: evaluationData.areaScores.video.total, fullMark: 100 },
-    { subject: '감정', score: evaluationData.areaScores.emotion.total, fullMark: 100 },
   ];
 
   const getGradeMessage = (score: number) => {
@@ -297,7 +295,7 @@ export default function FinalEvaluationPage() {
           {/* 영역별 상세 점수 */}
           <div className="bg-white rounded-2xl p-8 mb-8 shadow-sm">
             <h3 className="text-2xl font-bold text-[#27386d] mb-8 text-center">영역별 상세 분석</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 
               {/* 답변 내용 분석 */}
               <div className="border border-gray-200 rounded-xl p-6">
@@ -412,57 +410,6 @@ export default function FinalEvaluationPage() {
                         <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.video.posture}%`}}></div>
                       </div>
                       <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.video.posture}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 감정 */}
-              <div className="border border-gray-200 rounded-xl p-6">
-                <div className="flex items-center mb-6">
-                  <div className="w-12 h-12 bg-[#e7f8ff] rounded-full flex items-center justify-center mr-4">
-                    <i className="ri-emotion-happy-line text-2xl text-[#27386d]"></i>
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-semibold text-[#27386d]">감정</h4>
-                    <div className="text-3xl font-bold text-[#27386d]">{evaluationData.areaScores.emotion.total}점</div>
-                  </div>
-                </div>
-                <div className="min-h-[180px] flex flex-col justify-center space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 w-24">긍정적</span>
-                    <div className="flex items-center flex-1 justify-end">
-                      <div className="w-24 bg-gray-200 rounded-full h-2 mr-3">
-                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.emotion.positive}%`}}></div>
-                      </div>
-                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.emotion.positive}%</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 w-24">무표정</span>
-                    <div className="flex items-center flex-1 justify-end">
-                      <div className="w-24 bg-gray-200 rounded-full h-2 mr-3">
-                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.emotion.neutral}%`}}></div>
-                      </div>
-                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.emotion.neutral}%</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 w-24">긴장감</span>
-                    <div className="flex items-center flex-1 justify-end">
-                      <div className="w-24 bg-gray-200 rounded-full h-2 mr-3">
-                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.emotion.nervous}%`}}></div>
-                      </div>
-                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.emotion.nervous}%</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 w-24">부정적</span>
-                    <div className="flex items-center flex-1 justify-end">
-                      <div className="w-24 bg-gray-200 rounded-full h-2 mr-3">
-                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.emotion.negative}%`}}></div>
-                      </div>
-                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.emotion.negative}%</span>
                     </div>
                   </div>
                 </div>

@@ -185,7 +185,6 @@ class GeminiAdvisor:
             f"- 텍스트: {qa.detail_analysis['text']['score']}점\n"
             f"- 음성: {qa.detail_analysis['voice']['score']}점\n"
             f"- 영상: {qa.detail_analysis['video']['score']}점\n"
-            f"- 감정: {qa.detail_analysis['emotion']['score']}점\n"
             f"- 강점: {', '.join(qa.strengths)}\n"
             f"- 개선점: {', '.join(qa.improvements)}"
             for qa in question_analyses
