@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { getInterviewSessionId } from "@/api/api";
+import { requireEnv } from "@/lib/env";
 
 interface UseExpressionSocketProps {
     isAnswerActive: boolean;
@@ -24,8 +25,9 @@ export function useExpressionSocket({ isAnswerActive, questionId, setGazeActive,
         if (isAnswerActive && video) {
             const sessionId = getInterviewSessionId();
             const sessionQuery = sessionId ? `&session_id=${sessionId}` : "";
+            const wsUrl = requireEnv("NEXT_PUBLIC_EXPRESSION_WS_URL", process.env.NEXT_PUBLIC_EXPRESSION_WS_URL);
             socket = new WebSocket(
-                `${process.env.NEXT_PUBLIC_EXPRESSION_WS_URL || "wss://tooktac.shop:10443/api/ws/expression"}?question_id=${questionId}${sessionQuery}`
+                `${wsUrl}?question_id=${questionId}${sessionQuery}`
             );
 
             socket.onopen = () => {
