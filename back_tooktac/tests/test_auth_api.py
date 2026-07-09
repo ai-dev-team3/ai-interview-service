@@ -1,4 +1,5 @@
 """회원가입/로그인/로그아웃/me API 유닛 테스트"""
+from app import config
 
 
 def _signup_form(username="newuser"):
@@ -148,3 +149,41 @@ def test_logout_clears_cookie(auth_client):
     set_cookie = res.headers.get("set-cookie", "")
     assert "access_token" in set_cookie
     assert 'Max-Age=0' in set_cookie or 'max-age=0' in set_cookie.lower()
+
+
+def test_login_cookie_uses_dev_config_by_default(client, test_user):
+    """기본값: domain 없음 / Secure 없음 / SameSite=lax"""
+    res = client.post("/login", data={"username": "tester", "password": "pw1234"})
+
+    set_cookie = res.headers["set-cookie"]
+    assert "Domain=" not in set_cookie
+    assert "Secure" not in set_cookie
+    assert "SameSite=lax" in set_cookie
+
+
+def test_login_cookie_follows_config(client, test_user, monkeypatch):
+    """운영 설정을 주입하면 origin 헤더와 무관하게 쿠키 속성이 따라간다"""
+    monkeypatch.setattr(config, "COOKIE_DOMAIN", ".example.com")
+    monkeypatch.setattr(config, "COOKIE_SECURE", True)
+    monkeypatch.setattr(config, "COOKIE_SAMESITE", "none")
+
+    res = client.post("/login", data={"username": "tester", "password": "pw1234"})
+
+    set_cookie = res.headers["set-cookie"]
+    assert "Domain=.example.com" in set_cookie
+    assert "Secure" in set_cookie
+    assert "SameSite=none" in set_cookie
+
+
+def test_logout_cookie_matches_login_attributes(auth_client, monkeypatch):
+    """속성이 다르면 브라우저가 쿠키를 지우지 못한다 — login/logout이 같아야 함"""
+    monkeypatch.setattr(config, "COOKIE_DOMAIN", ".example.com")
+    monkeypatch.setattr(config, "COOKIE_SECURE", True)
+    monkeypatch.setattr(config, "COOKIE_SAMESITE", "none")
+
+    res = auth_client.post("/logout")
+
+    set_cookie = res.headers["set-cookie"]
+    assert "Domain=.example.com" in set_cookie
+    assert "Secure" in set_cookie
+    assert "SameSite=none" in set_cookie

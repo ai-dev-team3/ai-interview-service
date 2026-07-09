@@ -11,7 +11,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 
-from app.config import validate_settings
+from app.config import CORS_ALLOWED_ORIGINS, validate_settings
 
 validate_settings()
 
@@ -30,21 +30,12 @@ import app.repository.model_registry
 
 app = FastAPI()
 
-# 주의: CORS origin은 스킴+호스트(+포트)까지만 유효. path(/api 등)가 붙으면 매칭되지 않음
-origins = [
-    "http://localhost:3000",   # 개발 환경
-    "http://127.0.0.1:3000",   # 개발 환경 (IP 직접접속)
-    # 운영 환경은 https만 허용 (비TLS origin은 쿠키 탈취 위험)
-    "https://tooktac.shop",
-    "https://www.tooktac.shop",
-    "https://tooktac.shop:18080",
-    "https://www.tooktac.shop:18080",
-]
+origins = CORS_ALLOWED_ORIGINS
 
 # ✅ CORS 설정 추가
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # 개발 환경에선 Next.js 주소
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

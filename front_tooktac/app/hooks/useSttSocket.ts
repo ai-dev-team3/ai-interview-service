@@ -1,6 +1,7 @@
 // hooks/useSttSocket.ts
 import { useEffect, useRef } from "react";
 import { getInterviewSessionId } from "@/api/api";
+import { requireEnv } from "@/lib/env";
 
 interface UseSttSocketProps {
     isAnswerActive: boolean;
@@ -34,7 +35,8 @@ export function useSttSocket({ isAnswerActive, questionId, onTranscriptUpdate, o
 
                     const sessionId = getInterviewSessionId();
                     const sessionQuery = sessionId ? `&session_id=${sessionId}` : "";
-                    socket = new WebSocket(`${process.env.NEXT_PUBLIC_STT_WS_URL || "wss://tooktac.shop:10443/api/ws/transcript"}?question_id=${questionId}${sessionQuery}`);
+                    const wsUrl = requireEnv("NEXT_PUBLIC_STT_WS_URL", process.env.NEXT_PUBLIC_STT_WS_URL);
+                    socket = new WebSocket(`${wsUrl}?question_id=${questionId}${sessionQuery}`);
 
 
                     socket.onopen = () => {

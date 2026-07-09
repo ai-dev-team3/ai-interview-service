@@ -70,6 +70,31 @@ DB_NAME=tooktac
 JWT_SECRET_KEY=your-secret-key
 ```
 
+`CORS_ALLOWED_ORIGINS`는 필수이며, 비어 있으면 서버가 기동 시점에 실패합니다.
+브라우저가 접속하는 프론트 origin을 쉼표로 구분해 적습니다 (스킴+호스트+포트까지만, path 제외).
+
+로컬 개발:
+
+```env
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+COOKIE_DOMAIN=
+COOKIE_SECURE=
+COOKIE_SAMESITE=
+```
+
+운영(HTTPS). `example.com`은 실제 배포 도메인으로 바꿔 적습니다:
+
+```env
+CORS_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+COOKIE_DOMAIN=.example.com
+COOKIE_SECURE=true
+COOKIE_SAMESITE=none
+```
+
+프론트와 백엔드를 같은 호스트(Nginx의 `/`와 `/api/`)로 서빙한다면 둘은 same-site이므로 `COOKIE_SAMESITE=lax`로 두는 편이 더 안전합니다. 프론트를 다른 도메인에서 서빙할 때만 `none`이 필요합니다.
+
+`COOKIE_SAMESITE=none`은 `COOKIE_SECURE=true`와 함께여야 합니다 (아니면 브라우저가 쿠키를 버려 로그인이 안 됩니다). 이 조합도 기동 시점에 검증합니다.
+
 ### 3.3 AI/클라우드 서비스
 
 ```env
