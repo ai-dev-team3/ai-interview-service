@@ -13,15 +13,14 @@ logger = logging.getLogger(__name__)
 
 def calculate_final_score(text_result: EvaluationResult, video_result: VideoEvaluationResult, question_type: str) -> int:
     """
-    질문 유형에 따라 text/voice/video/emotion 점수를 가중 평균으로 계산
+    질문 유형에 따라 text/voice/video 점수를 가중 평균으로 계산
     """
     return QuestionTypeWeights.calculate_weighted_score({
         "type": question_type,
         "detailAnalysis": {
             "text": {"score": text_result.final_text_score or 0},
             "voice": {"score": text_result.final_speech_score or 0},
-            "video": {"score": video_result.final_video_score or 0},
-            "emotion": {"score": video_result.emotion_score or 0}
+            "video": {"score": video_result.final_video_score or 0}
         }
     })
 
@@ -150,70 +149,12 @@ def generate_interview_json_from_session(db: Session, session_id: int) -> dict:
                     "gaze_rate": {"percentage": video_result.gaze_score},
                     "shoulder_posture": {"score": 100 - video_result.shoulder_warning * 10},
                     "hand_posture": {"score": 100 - video_result.hand_warning * 10}
-                },
-                "emotion": {
-                    "score": video_result.emotion_score,
-                    "positive": video_result.positive_rate,
-                    "neutral": video_result.neutral_rate,
-                    "nervous": video_result.tense_rate,
-                    "negative": video_result.negative_rate
                 }
             },
             "feedback": text_result.final_feedback,
             "strengths": text_result.strengths.split("\n") if text_result.strengths else [],
             "improvements": text_result.improvements.split("\n") if text_result.improvements else []
         }
-
-
-        # def _safe(v, default=0):
-        #     return v if v is not None else default
-
-        # question_data = {
-        #     "question_id": str(question_id),
-        #     "question_number": order,
-        #     "question_type": q.question_type,
-        #     "final_score": calculate_final_score(
-        #         text_result or EvaluationResult(), 
-        #         video_result or VideoEvaluationResult(), 
-        #         q.question_type
-        #     ),
-        #     "question_text": q.question_text,
-        #     "user_answer": getattr(answer, "answer_text", None) or "",
-        #     "model_answer": getattr(text_result, "model_answer", None) or "",
-        #     "detail_analysis": {
-        #         "text": {
-        #             "score": _safe(getattr(text_result, "final_text_score", None)),
-        #             "similarity": _safe(getattr(text_result, "similarity", None)),
-        #             "accuracy": _safe(getattr(text_result, "knowledge_score", None)),
-        #             "understanding": _safe(getattr(text_result, "intent_score", None)),
-        #         },
-        #         "voice": {
-        #             "score": _safe(getattr(text_result, "final_speech_score", None)),
-        #             "speed": {"score": int(round(_safe(getattr(text_result, "speed_score", None)) * 2.5))},
-        #             "fluency": {"score": int(round(_safe(getattr(text_result, "filler_score", None)) * 2.5))},
-        #             "tone": {"score": int(round(_safe(getattr(text_result, "pitch_score", None)) * 5.0))},
-        #             "speed_label": getattr(text_result, "speed_label", None),
-        #             "fluency_label": getattr(text_result, "fluency_label", None),
-        #             "tone_label": getattr(text_result, "tone_label", None),
-        #         },
-        #         "video": {
-        #             "score": _safe(getattr(video_result, "final_video_score", None)),
-        #             "gaze_rate": {"percentage": _safe(getattr(video_result, "gaze_score", None))},
-        #             "shoulder_posture": {"score": 100 - _safe(getattr(video_result, "shoulder_warning", None)) * 10},
-        #             "hand_posture": {"score": 100 - _safe(getattr(video_result, "hand_warning", None)) * 10},
-        #         },
-        #         "emotion": {
-        #             "score": _safe(getattr(video_result, "emotion_score", None)),
-        #             "positive": _safe(getattr(video_result, "positive_rate", None)),
-        #             "neutral": _safe(getattr(video_result, "neutral_rate", None)),
-        #             "nervous": _safe(getattr(video_result, "tense_rate", None)),
-        #             "negative": _safe(getattr(video_result, "negative_rate", None)),
-        #         },
-        #     },
-        #     "feedback": getattr(text_result, "final_feedback", None) or "",
-        #     "strengths": (getattr(text_result, "strengths", None) or "").split("\n") if getattr(text_result, "strengths", None) else [],
-        #     "improvements": (getattr(text_result, "improvements", None) or "").split("\n") if getattr(text_result, "improvements", None) else [],
-        # }
 
         question_analyses.append(question_data)
 

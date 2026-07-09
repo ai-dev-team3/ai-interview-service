@@ -54,7 +54,7 @@ def _seed_report(db, user_id):
 
     db.add(ReportStrength(report_id=summary.id, title="논리력", description="논리적입니다", score=90))
     db.add(ReportImprovement(report_id=summary.id, priority=1, title="속도", description="말이 빠릅니다", score=60))
-    for name, score in (("text", 88), ("voice", 80), ("video", 84), ("emotion", 87)):
+    for name, score in (("text", 88), ("voice", 80), ("video", 84)):
         db.add(ReportAreaScore(report_id=summary.id, area_name=name, score=score))
     db.commit()
     return session, summary
@@ -72,7 +72,7 @@ def test_report_by_date(auth_client, db_session, test_user):
     data = res.json()["data"]
     assert data["totalScore"] == 85
     assert data["rank"] == "상위 15%"
-    assert data["areas"] == {"text": 88, "voice": 80, "video": 84, "emotion": 87}
+    assert data["areas"] == {"text": 88, "voice": 80, "video": 84}
     assert data["topStrengths"] == ["논리적입니다"]
     assert data["improvements"] == ["말이 빠릅니다"]
 

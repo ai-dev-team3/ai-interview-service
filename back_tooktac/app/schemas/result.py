@@ -30,5 +30,4 @@ class FullResultResponse(BaseModel):
     final_feedback: str = ""
     labels: SpeechLabels = SpeechLabels()
     video: VideoSummary = VideoSummary()
-    best_emotion: str = ""
     weighted_score: float = 0.0

@@ -71,7 +71,6 @@ PROFILE_SPECS = {
         "text":   ( 5, 25),  # 최종 텍스트 점수 범위
         "speech": (25, 45),  # 최종 음성 점수 범위
         "video":  (10, 35),  # 최종 비디오 점수 범위
-        "emotion":(40, 60),  # 감정 점수 범위
         "posture":(70, 90),  # 비디오 내부지표: 자세
         "gaze":   ( 5, 25),  # 비디오 내부지표: 시선
         "labels": {"speed":"느림","fluency_min":40,"tone_min":20}
@@ -80,7 +79,6 @@ PROFILE_SPECS = {
         "text":   (25, 45),
         "speech": (40, 55),
         "video":  (30, 55),
-        "emotion":(50, 70),
         "posture":(75, 92),
         "gaze":   (15, 35),
         "labels": {"speed":"느림","fluency_min":50,"tone_min":30}
@@ -89,7 +87,6 @@ PROFILE_SPECS = {
         "text":   (45, 65),
         "speech": (55, 70),
         "video":  (55, 75),
-        "emotion":(60, 80),
         "posture":(80, 95),
         "gaze":   (25, 50),
         "labels": {"speed":"보통","fluency_min":60,"tone_min":40}
@@ -98,7 +95,6 @@ PROFILE_SPECS = {
         "text":   (65, 80),
         "speech": (70, 85),
         "video":  (75, 90),
-        "emotion":(70, 90),
         "posture":(85, 98),
         "gaze":   (40, 65),
         "labels": {"speed":"보통","fluency_min":70,"tone_min":55}
@@ -107,7 +103,6 @@ PROFILE_SPECS = {
         "text":   (80, 95),
         "speech": (85, 95),
         "video":  (88, 97),
-        "emotion":(80, 95),
         "posture":(88, 99),
         "gaze":   (55, 80),
         "labels": {"speed":"빠름","fluency_min":80,"tone_min":70}
@@ -169,7 +164,7 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
             db.flush()
 
             # 프로필별 수치 누적
-            text_scores, speech_scores, video_scores, emotion_scores = [], [], [], []
+            text_scores, speech_scores, video_scores = [], [], []
 
             # 3) 6문항 생성
             for order, (q_text, q_type) in enumerate(QUESTION_TEMPLATES, start=1):
@@ -209,10 +204,6 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
                 gaze    = rand_in(*spec["gaze"])
                 video_final = int(round(posture*0.6 + gaze*0.4))
                 video_final = max(0, min(100, video_final))
-
-                # 감정
-                emotion_final = rand_in(*spec["emotion"])
-                emotion_best = "중립" if emotion_final < 75 else "긍정"
 
                 # 의미(0~1 범위는 대략 변환)
                 similarity = round(random.uniform(0.1, 0.9) * (text_final/100.0), 4)
@@ -263,11 +254,6 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
                 ))
 
                 # VideoEvaluationResult 저장
-                positive = max(0, min(100, int(emotion_final*0.3)))
-                neutral  = max(0, min(100, 100 - positive - random.randint(0, 15)))
-                negative = max(0, 100 - positive - neutral)
-                tense    = max(0, min(100, 100 - emotion_final))
-
                 db.add(VideoEvaluationResult(
                     user_id=user.id,
                     session_id=session.id,
@@ -278,12 +264,6 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
                     hand_warning=random.randint(0, 1 if profile in ["중상","상"] else 2),
                     posture_score=posture,
                     final_video_score=video_final,
-                    positive_rate=positive,
-                    neutral_rate=neutral,
-                    negative_rate=negative,
-                    tense_rate=tense,
-                    emotion_best=emotion_best,
-                    emotion_score=emotion_final,
                     created_at=now,
                 ))
 
@@ -291,14 +271,12 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
                 text_scores.append(text_final)
                 speech_scores.append(speech_final)
                 video_scores.append(video_final)
-                emotion_scores.append(emotion_final)
 
             # 4) 평균 기반 종합 점수 및 등급
             total_score = int(round(mean([
                 mean(text_scores),
                 mean(speech_scores),
                 mean(video_scores),
-                mean(emotion_scores),
             ])))
             rank_value, grade, grade_message = grade_of(total_score)
 
@@ -322,12 +300,6 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
 
             # 5) 강점/개선점
             db.add_all([
-                ReportStrength(
-                    report_id=summary.id,
-                    title="감정 안정성",
-                    description="감정 기복이 크지 않고 안정적으로 응대합니다.",
-                    score=max(emotion_scores),
-                ),
                 ReportStrength(
                     report_id=summary.id,
                     title="답변 구조화",
@@ -364,7 +336,6 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
             text_total = int(round(mean(text_scores)))
             voice_total = int(round(mean(speech_scores)))
             video_total = int(round(mean(video_scores)))
-            emotion_total = int(round(mean(emotion_scores)))
 
             db.add_all([
                 ReportAreaScore(
@@ -399,27 +370,14 @@ def seed_dummy_data_with_profiles(target_date: datetime | None=None):
                     },
                     created_at=now,
                 ),
-                ReportAreaScore(
-                    report_id=summary.id,
-                    area_name="emotion",
-                    score={
-                        "total": emotion_total,
-                        "positive": max(0, min(100, int(emotion_total*0.35))),
-                        "neutral": max(0, min(100, 100 - int(emotion_total*0.35) - random.randint(0, 10))),
-                        "negative": max(0, min(100, 100 - int(emotion_total*0.35) - max(0, 100 - int(emotion_total*0.35) - random.randint(0, 10)))),
-                        "nervous": max(0, min(100, int(100 - emotion_total))),
-                    },
-                    created_at=now,
-                ),
             ])
 
             # 7) 질문별 점수(리포트용)
             for order, (q_text, q_type) in enumerate(QUESTION_TEMPLATES, start=1):
                 q_score = max(0, min(100, int(round(
-                    (text_scores[order-1]*0.35)
+                    (text_scores[order-1]*0.5)
                     + (speech_scores[order-1]*0.3)
                     + (video_scores[order-1]*0.2)
-                    + (emotion_scores[order-1]*0.15)
                 ))))
                 db.add(ReportQuestionScore(
                     report_id=summary.id,

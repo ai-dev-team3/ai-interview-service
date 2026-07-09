@@ -1,4 +1,4 @@
-"""4영역 점수 집계 (단순 평균)"""
+"""3영역 점수 집계 (단순 평균)"""
 import statistics
 from typing import Dict, List
 
@@ -18,7 +18,7 @@ class ScoreAggregator:
         Returns:
             집계된 점수 딕셔너리
         """
-        # 4영역 평균 점수 계산
+        # 3영역 평균 점수 계산
         area_scores = self._calculate_area_averages(question_analyses)
 
         # 최종 종합 점수 계산
@@ -39,13 +39,12 @@ class ScoreAggregator:
         }
 
     def _calculate_area_averages(self, question_analyses: List[QuestionAnalysis]) -> Dict:
-        """4영역(텍스트, 음성, 영상, 감정)의 평균 점수 계산"""
+        """3영역(텍스트, 음성, 영상)의 평균 점수 계산"""
 
         # 각 영역별 점수들을 수집
         text_scores = []
         voice_scores = []
         video_scores = []
-        emotion_scores = []
 
         # 세부 지표별 점수들도 수집
         text_similarity = []
@@ -59,11 +58,6 @@ class ScoreAggregator:
         video_gaze_rate = []
         video_shoulder_scores = []
         video_hand_scores = []
-
-        emotion_positive = []
-        emotion_neutral = []
-        emotion_nervous = []
-        emotion_negative = []
 
         # 각 질문에서 점수 추출
         for qa in question_analyses:
@@ -87,13 +81,6 @@ class ScoreAggregator:
             video_shoulder_scores.append(detail['video']['shoulder_posture']['score'])
             video_hand_scores.append(detail['video']['hand_posture']['score'])
 
-            # 감정 영역
-            emotion_scores.append(detail['emotion']['score'])
-            emotion_positive.append(detail['emotion']['positive'])
-            emotion_neutral.append(detail['emotion']['neutral'])
-            emotion_nervous.append(detail['emotion']['nervous'])
-            emotion_negative.append(detail['emotion']['negative'])
-
         # 평균 계산 후 반환
         return {
             'text': {
@@ -116,25 +103,16 @@ class ScoreAggregator:
                     (shoulder + hand) / 2
                     for shoulder, hand in zip(video_shoulder_scores, video_hand_scores)
                 ]))
-            },
-            'emotion': {
-                'total': round(statistics.mean(emotion_scores)),
-                # 감정 비율은 전체 질문의 평균
-                'positive': round(statistics.mean(emotion_positive)),
-                'neutral': round(statistics.mean(emotion_neutral)),
-                'nervous': round(statistics.mean(emotion_nervous)),
-                'negative': round(statistics.mean(emotion_negative))
             }
         }
 
     def _calculate_total_score(self, area_scores: Dict) -> int:
-        """4영역 점수의 단순 평균으로 최종 점수 계산"""
+        """3영역 점수의 단순 평균으로 최종 점수 계산"""
         total = (
                         area_scores['text']['total'] +
                         area_scores['voice']['total'] +
-                        area_scores['video']['total'] +
-                        area_scores['emotion']['total']
-                ) / 4
+                        area_scores['video']['total']
+                ) / 3
         return round(total)
 
     def _calculate_rank(self, total_score: int) -> str:

@@ -8,12 +8,11 @@ from app.services.report.score_aggregator import ScoreAggregator
 from app.services.text.orchestrator import preprocess_input
 
 
-def _detail(text=80, voice=70, video=90, emotion=60):
+def _detail(text=80, voice=70, video=90):
     return {
         "text": {"score": text, "similarity": 75, "accuracy": 80, "understanding": 85},
         "voice": {"score": voice, "speed": {"score": 70}, "fluency": {"score": 75}, "tone": {"score": 65}},
         "video": {"score": video, "gaze_rate": {"percentage": 88}, "shoulder_posture": {"score": 90}, "hand_posture": {"score": 92}},
-        "emotion": {"score": emotion, "positive": 50, "neutral": 30, "nervous": 15, "negative": 5},
     }
 
 
@@ -33,11 +32,10 @@ class TestScoreAggregator:
         assert result["area_scores"]["text"]["total"] == 80
         assert result["area_scores"]["voice"]["total"] == 70
         assert result["area_scores"]["video"]["total"] == 90
-        assert result["area_scores"]["emotion"]["total"] == 60
-        # (80+70+90+60)/4 = 75
-        assert result["total_evaluation"]["total_score"] == 75
-        assert result["total_evaluation"]["grade"] == "B"
-        assert result["total_evaluation"]["rank"] == "상위 35%"
+        # (80+70+90)/3 = 80
+        assert result["total_evaluation"]["total_score"] == 80
+        assert result["total_evaluation"]["grade"] == "B+"
+        assert result["total_evaluation"]["rank"] == "상위 25%"
         assert len(result["question_scores"]) == 6
 
     @pytest.mark.parametrize("score,grade", [

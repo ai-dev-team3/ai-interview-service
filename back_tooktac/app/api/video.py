@@ -1,9 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect  # 라우터/웹소켓 임포트
 import asyncio
-import os
 from sqlalchemy.orm import Session  # DB 세션 타입 힌트
 from app.services.vision.posture_analyzer import PostureAnalyzer, PostureCoreModel, PostureSessionState  # 포즈 분석기 구성요소
-from app.services.emotion.emotion_analyzer import EmotionAnalyzer, EmotionCoreModel, EmotionSessionState  # 감정 분석기 구성요소
 from app.utils.auth_ws import get_user_id_from_websocket  # WebSocket에서 사용자 인증 정보 추출
 from app.repository.analysis import VideoEvaluationResult  # 결과 저장용 ORM 모델
 from app.repository.interview import InterviewQuestion  # 질문 ORM
@@ -16,23 +14,19 @@ router = APIRouter()  # FastAPI 라우터 생성
 
 # 무거운 모델은 프로세스당 1회 로드
 GLOBAL_POSTURE_CORE = PostureCoreModel()  # MediaPipe 코어 로드
-GLOBAL_EMOTION_CORE = EmotionCoreModel(model_path=os.path.join(os.path.dirname(__file__), "best.pt"))  # YOLO 코어 로드
 
 # 얇은 Analyzer는 코어를 참조만 함(상태 없음)
 GLOBAL_POSTURE = PostureAnalyzer(GLOBAL_POSTURE_CORE)  # 포즈 분석기
-GLOBAL_EMOTION = EmotionAnalyzer(GLOBAL_EMOTION_CORE)  # 감정 분석기
 
 def _save_video_result(
     db: Session,
     user_id: int,
     question_order: int,
     posture_state: "PostureSessionState",
-    emotion_state: "EmotionSessionState",
     explicit_session_id: int | None = None,
 ) -> None:
     """질문 종료 시점의 누적 상태를 VideoEvaluationResult로 저장 (세션/질문 없으면 스킵)"""
     final_video = posture_state.finalize()  # 포즈 최종 점수 계산
-    emo_sum = emotion_state.summary()  # 감정 요약 계산
 
     # 세션 결정 (명시 session_id 우선, 소유권 검증 포함 / 없으면 최신 세션 폴백)
     session = resolve_session(db, user_id, explicit_session_id)
@@ -57,13 +51,7 @@ def _save_video_result(
         shoulder_warning=final_video["shoulder_posture_warning_count"],  # 어깨 경고 수
         hand_warning=final_video["hand_posture_warning_count"],  # 손 경고 수
         posture_score=final_video["shoulder_hand_score"],  # 어깨+손 합산 점수
-        final_video_score=final_video["video_score"],  # 최종 비디오 점수
-        positive_rate=emo_sum.get("긍정", 0),  # 긍정 비율
-        neutral_rate=emo_sum.get("중립", 0),  # 중립 비율
-        negative_rate=emo_sum.get("부정", 0),  # 부정 비율
-        tense_rate=emo_sum.get("긴장", 0),  # 긴장 비율
-        emotion_best=emo_sum.get("best"),  # 최빈 감정
-        emotion_score=emo_sum.get("score")  # 감정 점수
+        final_video_score=final_video["video_score"]  # 최종 비디오 점수
     )
     db.add(video_result)  # DB 세션에 추가
     db.commit()  # 커밋으로 저장
@@ -74,11 +62,9 @@ async def expression_socket(websocket: WebSocket):
     await websocket.accept()  # 클라이언트 WebSocket 연결 수락
 
     analyzer = GLOBAL_POSTURE  # 전역 포즈 분석기 참조
-    emotion_analyzer = GLOBAL_EMOTION  # 전역 감정 분석기 참조
 
     # 질문 생명주기 동안만 유지되는 상태 객체 생성
     posture_state = PostureSessionState()  # 포즈 누적 상태
-    emotion_state = EmotionSessionState()  # 감정 누적 상태
 
     # 인증/파라미터 파싱 전에 예외가 나도 except 블록에서 참조 가능하도록 선초기화
     user_id: int | None = None
@@ -117,12 +103,6 @@ async def expression_socket(websocket: WebSocket):
                 await websocket.send_json({"expression": "프레임 분석 실패"})  # 포즈 분석 에러 통지
                 continue  # 다음 프레임으로 진행
 
-            try:
-                # YOLO 추론도 동일하게 워커 스레드로 위임
-                await asyncio.to_thread(emotion_analyzer.analyze_frame, frame, emotion_state)  # 감정 분석 수행(상태 누적)
-            except Exception:
-                pass  # 감정 분석 실패는 무시하고 진행
-
             # 프론트에 즉시 피드백 전송
             await websocket.send_json({"expression": result})  # 프레임별 결과 전송
 
@@ -132,12 +112,12 @@ async def expression_socket(websocket: WebSocket):
     except WebSocketDisconnect:
         # 연결 종료 시 이 질문의 최종 결과 저장 (인증/파라미터 확보 전이면 스킵)
         if user_id is not None and question_order is not None:
-            _save_video_result(db, user_id, question_order, posture_state, emotion_state, explicit_session_id)
+            _save_video_result(db, user_id, question_order, posture_state, explicit_session_id)
 
     except Exception:
         # 예외 발생 시에도 현재까지 상태로 저장 시도 (인증 실패 등으로 미확보면 스킵)
         if user_id is not None and question_order is not None:
-            _save_video_result(db, user_id, question_order, posture_state, emotion_state, explicit_session_id)
+            _save_video_result(db, user_id, question_order, posture_state, explicit_session_id)
 
         # 프론트에 오류 알림(가능하면 마지막으로 시도)
         try:

@@ -74,7 +74,6 @@ def get_full_latest_result(
         "detailAnalysis": {
             "text": {"score": (text_result.final_text_score or 0) if text_result else 0},
             "voice": {"score": (text_result.final_speech_score or 0) if text_result else 0},
-            "emotion": {"score": (video_result.emotion_score or 0) if video_result else 0},
             "video": {"score": (video_result.final_video_score or 0) if video_result else 0}
         }
     }
@@ -101,6 +100,5 @@ def get_full_latest_result(
             shoulder_warning=(video_result.shoulder_warning or 0) if video_result else 0,
             hand_warning=(video_result.hand_warning or 0) if video_result else 0,
         ),
-        best_emotion=(video_result.emotion_best or "") if video_result else "",
         weighted_score=weighted_score,
     )
