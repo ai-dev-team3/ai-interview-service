@@ -6,7 +6,7 @@ import { getResumeStatus } from '@/api/api';
 
 /**
  * 이력서 등록이 선행되어야 하는 기능(AI 면접 등)의 라우터 가드.
- * 미등록 상태면 마이페이지 이력서 업로드 섹션으로 리다이렉트한다.
+ * 미등록 상태면 계정 관리의 이력서 업로드 섹션으로 리다이렉트한다.
  */
 export default function ResumeGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -22,7 +22,7 @@ export default function ResumeGuard({ children }: { children: ReactNode }) {
         if (has_resume) {
           setAllowed(true);
         } else {
-          router.replace('/mypage?resume=required');
+          router.replace('/mypage/account?resume=required');
         }
       } catch (err: any) {
         if (cancelled) return;

@@ -1,14 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api, {
   changePassword,
   deleteAccount,
   getAccount,
+  getResumeStatus,
+  uploadResume,
   type AccountInfo,
 } from '@/api/api';
+import ResumeUploader from '@/components/ResumeUploader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUser } from '@/contexts/UserContext';
 
@@ -21,6 +24,9 @@ export default function AccountPage() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [hasResume, setHasResume] = useState<boolean | null>(null);
+  const [resumeSaving, setResumeSaving] = useState(false);
+  const resumeSectionRef = useRef<HTMLDivElement>(null);
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
     new_password: '',
@@ -42,6 +48,28 @@ export default function AccountPage() {
   }, [router]);
 
   useEffect(() => {
+    const loadResumeStatus = async () => {
+      try {
+        const data = await getResumeStatus();
+        setHasResume(data.has_resume);
+      } catch {
+        setHasResume(null);
+      }
+    };
+    loadResumeStatus();
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('resume') === 'required') {
+      setToast('이력서를 먼저 등록해야 면접을 시작할 수 있습니다.');
+      setTimeout(() => resumeSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  }, [loading]);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(''), 4000);
     return () => clearTimeout(timer);
@@ -50,6 +78,23 @@ export default function AccountPage() {
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setPasswordForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleResumeExtracted = async (text: string, fileName?: string) => {
+    setResumeSaving(true);
+    try {
+      const result = await uploadResume(text, fileName);
+      setHasResume(true);
+      setToast(
+        result?.structured === false
+          ? '이력서가 저장되었습니다. 분석은 면접 시작 시 자동으로 진행됩니다.'
+          : '이력서가 등록되었습니다.'
+      );
+    } catch {
+      setToast('이력서 등록에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setResumeSaving(false);
+    }
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -138,7 +183,7 @@ export default function AccountPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-[#27386d] mb-2">계정 관리</h1>
-          <p className="text-gray-600">로그인 정보와 계정 상태를 관리합니다.</p>
+          <p className="text-gray-600">로그인 정보와 이력서 상태를 관리합니다.</p>
         </div>
 
         <div className="grid gap-6">
@@ -158,6 +203,29 @@ export default function AccountPage() {
                 <p className="text-sm text-gray-700">{account?.email || '-'}</p>
               </div>
             </div>
+          </div>
+
+          <div ref={resumeSectionRef} className="bg-white rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-[#27386d]">이력서 관리</h2>
+              {hasResume !== null && (
+                <span
+                  className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    hasResume ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {hasResume ? '등록됨' : '미등록'}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              이력서를 등록하면 이력서·자기소개서 기반 맞춤 면접 질문이 생성됩니다.
+              {hasResume ? ' 새 파일을 업로드하면 기존 이력서를 대체합니다.' : ''}
+            </p>
+            <ResumeUploader onExtracted={handleResumeExtracted} />
+            {resumeSaving && (
+              <p className="mt-2 text-sm text-gray-500 text-center">저장 중...</p>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl p-6 shadow-sm">

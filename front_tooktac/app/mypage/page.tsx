@@ -425,7 +425,7 @@ export default function MyPage() {
               <div>
                 <h2 className="text-lg font-semibold text-[#27386d]">계정 관리</h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  아이디 확인, 비밀번호 변경, 회원 탈퇴를 관리합니다.
+                  이력서 등록, 아이디 확인, 비밀번호 변경, 회원 탈퇴를 관리합니다.
                 </p>
               </div>
               <Link
