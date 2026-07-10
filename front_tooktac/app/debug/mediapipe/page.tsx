@@ -27,6 +27,8 @@ const POSE_INDICES = [7, 8, 11, 12, 19, 20];
 
 const TARGET_FPS = 5;
 const WASM_PATH = '/mediapipe/wasm';
+// ?delegate=cpu 로 CPU(WASM) 추론 시간을 잴 수 있다. 저사양 기기의 대략적 상한이다.
+// ?mirror=0 으로 좌우 반전을 끌 수 있다 (기본 켬 — posture_analyzer.py 의 cv2.flip 재현).
 const FACE_MODEL =
     'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 const POSE_MODEL =
@@ -45,6 +47,7 @@ type Report = {
     coordRange: string;
     visibilitySample: string;
     payloadBytes: number;
+    binaryBytes: number;
 };
 
 /** facialTransformationMatrixes(4x4, column-major)에서 피치를 뽑는다. */
@@ -63,12 +66,17 @@ function pick(landmarks: NormalizedLandmark[], indices: number[]) {
 
 export default function MediaPipeProbePage() {
     const videoRef = useRef<HTMLVideoElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const faceRef = useRef<FaceLandmarker | null>(null);
     const poseRef = useRef<PoseLandmarker | null>(null);
 
     const [status, setStatus] = useState('초기화 중...');
     const [report, setReport] = useState<Report | null>(null);
     const [samples, setSamples] = useState<number[]>([]);
+
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const forcedDelegate = params?.get('delegate')?.toUpperCase() === 'CPU' ? 'CPU' : 'GPU';
+    const mirror = params?.get('mirror') !== '0';
 
     const load = useCallback(async (delegate: 'GPU' | 'CPU') => {
         const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
@@ -95,12 +103,13 @@ export default function MediaPipeProbePage() {
         (async () => {
             try {
                 let models;
+                usedDelegate = forcedDelegate;
                 try {
-                    setStatus('GPU delegate 로 로드 중...');
-                    models = await load('GPU');
+                    setStatus(`${forcedDelegate} delegate 로 로드 중...`);
+                    models = await load(forcedDelegate);
                 } catch (e) {
-                    console.warn('GPU delegate 실패, CPU 로 폴백:', e);
-                    usedDelegate = 'CPU (GPU 실패)';
+                    console.warn(`${forcedDelegate} delegate 실패, CPU 로 폴백:`, e);
+                    usedDelegate = `CPU (${forcedDelegate} 실패)`;
                     setStatus('CPU delegate 로 로드 중...');
                     models = await load('CPU');
                 }
@@ -117,7 +126,7 @@ export default function MediaPipeProbePage() {
                 video.srcObject = stream;
                 await video.play();
 
-                setStatus(`측정 중 (${TARGET_FPS}fps, delegate=${usedDelegate})`);
+                setStatus(`측정 중 (${TARGET_FPS}fps, delegate=${usedDelegate}, mirror=${mirror})`);
 
                 timer = setInterval(() => {
                     const v = videoRef.current;
@@ -125,11 +134,30 @@ export default function MediaPipeProbePage() {
                     const p = poseRef.current;
                     if (!v || !f || !p || v.readyState < 2) return;
 
+                    // posture_analyzer.py:53 의 cv2.flip(frame, 1) 을 재현한다.
+                    // 뒤집힌 영상에서는 MediaPipe 가 좌우를 반대로 라벨링하므로,
+                    // 좌표만 1-x 하는 것으로는 서버 로직과 맞지 않는다.
+                    let source: HTMLVideoElement | HTMLCanvasElement = v;
+                    if (mirror) {
+                        const canvas = canvasRef.current!;
+                        if (canvas.width !== v.videoWidth) {
+                            canvas.width = v.videoWidth;
+                            canvas.height = v.videoHeight;
+                        }
+                        const ctx = canvas.getContext('2d')!;
+                        ctx.save();
+                        ctx.translate(canvas.width, 0);
+                        ctx.scale(-1, 1);
+                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        ctx.restore();
+                        source = canvas;
+                    }
+
                     const ts = performance.now();
                     const t0 = performance.now();
-                    const faceResult = f.detectForVideo(v, ts);
+                    const faceResult = f.detectForVideo(source, ts);
                     const t1 = performance.now();
-                    const poseResult = p.detectForVideo(v, ts);
+                    const poseResult = p.detectForVideo(source, ts);
                     const t2 = performance.now();
 
                     const faceLm = faceResult.faceLandmarks?.[0];
@@ -140,7 +168,10 @@ export default function MediaPipeProbePage() {
                         face: faceLm ? pick(faceLm, FACE_INDICES) : null,
                         pose: poseLm ? pick(poseLm, POSE_INDICES) : null,
                     };
-                    const payloadBytes = new TextEncoder().encode(JSON.stringify(payload)).length;
+                    const jsonBytes = new TextEncoder().encode(JSON.stringify(payload)).length;
+                    // 실제로는 Float32Array 로 보낸다: 18개 × (x, y, visibility) × 4바이트
+                    const binaryBytes = (FACE_INDICES.length + POSE_INDICES.length) * 3 * 4;
+                    const payloadBytes = jsonBytes;
 
                     const totalMs = t2 - t0;
                     setSamples((prev) => [...prev.slice(-29), totalMs]);
@@ -161,6 +192,7 @@ export default function MediaPipeProbePage() {
                             ? `LEFT_INDEX=${poseLm[19]?.visibility.toFixed(3)} RIGHT_INDEX=${poseLm[20]?.visibility.toFixed(3)}`
                             : '-',
                         payloadBytes,
+                        binaryBytes,
                     });
                 }, 1000 / TARGET_FPS);
             } catch (e) {
@@ -186,7 +218,11 @@ export default function MediaPipeProbePage() {
             <h1 className="text-2xl font-bold mb-2">MediaPipe 브라우저 추론 프로토타입</h1>
             <p className="text-sm text-slate-600 mb-6">{status}</p>
 
-            <video ref={videoRef} muted playsInline className="w-80 rounded-lg border mb-6" />
+            <video ref={videoRef} muted playsInline className="w-80 rounded-lg border mb-2" />
+            <canvas ref={canvasRef} className="hidden" />
+            <p className="text-xs text-slate-500 mb-6">
+                ?delegate=cpu 로 CPU 추론 시간 측정 · ?mirror=0 으로 좌우 반전 해제
+            </p>
 
             {report && (
                 <div className="grid gap-2 max-w-2xl text-sm font-mono">
@@ -206,7 +242,12 @@ export default function MediaPipeProbePage() {
                     <Row label="행렬에서 뽑은 피치" value={report.pitchDeg === null ? '-' : `${report.pitchDeg}°`} />
                     <Row label="좌표 범위" value={report.coordRange} />
                     <Row label="visibility 샘플" value={report.visibilitySample} />
-                    <Row label="랜드마크 18개 페이로드" value={`${report.payloadBytes} bytes/frame`} />
+                    <Row label="랜드마크 18개 (JSON)" value={`${report.payloadBytes} bytes/frame`} />
+                    <Row label="랜드마크 18개 (Float32 바이너리)" value={`${report.binaryBytes} bytes/frame`} />
+                    <Row
+                        label="현재 JPEG 방식과 비교"
+                        value={`JPEG 약 30~50KB → ${(40000 / report.binaryBytes).toFixed(0)}배 감소`}
+                    />
                 </div>
             )}
         </div>
