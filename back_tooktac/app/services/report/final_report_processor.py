@@ -13,12 +13,6 @@ from .report_builder import ReportBuilder
 logger = logging.getLogger(__name__)
 
 class FinalEvaluationGenerator:
-    def __init__(self):
-        # 단계 이름은 면접 구성 단일 소스(plan.STEP_NAMES)를 따른다
-        from app.services.interview.plan import STEP_NAMES
-
-        self.step_names = list(STEP_NAMES)
-
     def generate_final_report(self, user_info: UserInfo, question_analyses: List[QuestionAnalysis]) -> Dict:
         try:
             # 1. 점수 집계
@@ -37,10 +31,8 @@ class FinalEvaluationGenerator:
             report_builder = ReportBuilder()
             final_report = report_builder.build_final_report(
                 user_info,
-                question_analyses,
                 aggregated_scores,
                 ai_advice,
-                self.step_names
             )
 
             return final_report

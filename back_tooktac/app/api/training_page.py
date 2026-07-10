@@ -15,7 +15,6 @@ from app.repository.report import (
     ReportAreaScore,
     ReportQuestionScore,
 )
-from app.services.interview.plan import FOLLOWUP_ORDERS
 from app.services.report.score_utils import avg_or_zero, find_area_score, normalize_question_type
 from app.services.user.dependencies import get_current_user # 프로젝트에서 사용 중인 인증 의존성
 from app.utils.time_utils import kst_date_expr, kst_day_utc_range, kst_today, to_kst  # UTC 저장 → KST 조회 변환
@@ -279,18 +278,11 @@ def get_weekly_training_data(
             .all()
         )
         buckets: Dict[str, List[int]] = {
-            "concept": [], "technical": [], "situation": [], "behavior": [], "followUp": []
+            "concept": [], "technical": [], "situation": [], "behavior": []
         }
 
         for q in q_rows:
-            score = int(q.score or 0)
-
-            # 꼬리질문 위치는 면접 구성 단일 소스(plan.FOLLOWUP_ORDERS) 기준
-            if q.question_order in FOLLOWUP_ORDERS:
-                buckets["followUp"].append(score)
-            else:
-                key = normalize_question_type(q.question_type)
-                buckets[key].append(score)
+            buckets[normalize_question_type(q.question_type)].append(int(q.score or 0))
 
         # 평균 계산
         question_types = {k: avg_or_zero(v) for k, v in buckets.items()}

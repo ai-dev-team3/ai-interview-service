@@ -1,6 +1,6 @@
 """이력서 원문 텍스트 → 구조화 JSON 변환 (LCEL 체인).
 
-출력 스키마는 질문 생성기(InterviewQuestionGenerator)가 읽는 필드에 맞춰 고정한다.
+출력 스키마는 질문 생성기(ResumeQuestionGenerator)가 읽는 필드에 맞춰 고정한다.
 """
 import logging
 from typing import Optional

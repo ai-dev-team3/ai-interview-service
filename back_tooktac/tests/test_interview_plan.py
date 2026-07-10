@@ -1,38 +1,29 @@
 """services/interview/plan.py — 면접 구성 단일 소스 일관성 테스트"""
 from app.services.interview.plan import (
-    FOLLOWUP_ORDERS,
-    QUESTION_FLOW,
-    STEP_NAMES,
-    TOTAL_QUESTIONS,
+    DEFAULT_QUESTION_TYPE,
+    FALLBACK_QUESTION_TYPE,
+    MAX_GENERATED_QUESTIONS,
+    MAX_INTERVIEW_QUESTIONS,
+    MIN_GENERATED_QUESTIONS,
+    QUESTION_TYPES,
 )
-from app.services.text.make_question import InterviewQuestionGenerator
+from app.services.score.scoring import QuestionTypeWeights
 
 
-def test_flow_covers_all_orders():
-    assert sorted(QUESTION_FLOW.keys()) == list(range(1, TOTAL_QUESTIONS + 1))
+def test_default_and_fallback_types_are_known():
+    assert DEFAULT_QUESTION_TYPE in QUESTION_TYPES
+    assert FALLBACK_QUESTION_TYPE in QUESTION_TYPES
 
 
-def test_followup_orders_have_refs():
-    for order in FOLLOWUP_ORDERS:
-        refs = QUESTION_FLOW[order]["refs"]
-        assert refs, f"{order}번은 꼬리물기인데 refs가 없음"
-        # 참조는 항상 자신보다 앞선 질문이어야 함
-        assert all(r < order for r in refs)
+def test_question_types_all_have_scoring_weights():
+    # 유형을 추가하면 채점 가중치도 함께 추가해야 한다
+    assert set(QUESTION_TYPES) == set(QuestionTypeWeights.WEIGHTS)
 
 
-def test_non_followup_orders_have_no_refs():
-    for order, flow in QUESTION_FLOW.items():
-        if order not in FOLLOWUP_ORDERS:
-            assert flow["refs"] is None
+def test_generated_question_range():
+    assert 1 <= MIN_GENERATED_QUESTIONS <= MAX_GENERATED_QUESTIONS
 
 
-def test_step_names_length():
-    # 아이스브레이킹 + 질문 N개 + 최종 평가
-    assert len(STEP_NAMES) == TOTAL_QUESTIONS + 2
-    assert STEP_NAMES[0] == "아이스브레이킹"
-    assert STEP_NAMES[-1] == "최종 평가"
-
-
-def test_flow_methods_exist_on_generator():
-    for flow in QUESTION_FLOW.values():
-        assert hasattr(InterviewQuestionGenerator, flow["method"])
+def test_interview_can_hold_default_plus_generated():
+    # 기본 자기소개 질문 1개 + 최소 1개는 담을 수 있어야 한다
+    assert MAX_INTERVIEW_QUESTIONS >= 1 + MIN_GENERATED_QUESTIONS

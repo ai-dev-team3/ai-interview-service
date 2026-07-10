@@ -19,14 +19,13 @@ def to_number_score(maybe_json) -> int:
 
 
 def normalize_question_type(name: str) -> str:
-    """질문유형 문자열을 프론트에서 쓰는 5키로 정규화."""
+    """질문유형 문자열을 프론트에서 쓰는 4키로 정규화."""
     n = (name or "").strip().lower()
     mapper = {
         "개념": "concept", "개념설명": "concept", "concept": "concept",
         "기술": "technical", "기술형": "technical", "technical": "technical",
         "상황": "situation", "상황형": "situation", "situation": "situation",
         "행동": "behavior", "행동형": "behavior", "behavior": "behavior",
-        "꼬리": "followUp", "꼬리질문": "followUp", "followup": "followUp", "follow_up": "followUp"
     }
     for k, v in mapper.items():
         if k in n:
