@@ -1,7 +1,12 @@
+import logging
+
 from transformers import AutoModel, AutoTokenizer
 from sentence_transformers import SentenceTransformer
 import torch
 import torch.nn.functional as F
+
+logger = logging.getLogger(__name__)
+
 
 class SimilarityScorer:
     def __init__(self):
@@ -12,15 +17,44 @@ class SimilarityScorer:
         self.weights = [0.7, 0.3]
         self.models = self._load_models()
 
+    @staticmethod
+    def _load_cached_first(loader, name: str):
+        """캐시가 있으면 네트워크 없이 로드한다.
+
+        HuggingFace Hub는 캐시가 있어도 파일마다 ETag 재검증 요청을 보내
+        모델 두 개 로드에 6초 가까이 쓴다(실측). local_files_only=True로
+        그 왕복을 없애고, 캐시가 없을 때만 평소대로 내려받는다.
+        """
+        try:
+            return loader(local_files_only=True)
+        except Exception:
+            logger.info("%s 캐시 없음 — HuggingFace Hub에서 내려받는다", name)
+            return loader(local_files_only=False)
+
     def _load_models(self):
         models = {}
         for name in self.model_names:
             if "snunlp" in name:
-                tokenizer = AutoTokenizer.from_pretrained(name)
-                model = AutoModel.from_pretrained(name)
+                tokenizer = self._load_cached_first(
+                    lambda local_files_only: AutoTokenizer.from_pretrained(
+                        name, local_files_only=local_files_only
+                    ),
+                    name,
+                )
+                model = self._load_cached_first(
+                    lambda local_files_only: AutoModel.from_pretrained(
+                        name, local_files_only=local_files_only
+                    ),
+                    name,
+                )
                 models[name] = {"type": "huggingface", "model": model, "tokenizer": tokenizer}
             else:
-                model = SentenceTransformer(name)
+                model = self._load_cached_first(
+                    lambda local_files_only: SentenceTransformer(
+                        name, local_files_only=local_files_only
+                    ),
+                    name,
+                )
                 models[name] = {"type": "sentence-transformers", "model": model}
         return models
 
