@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/contexts/UserContext';
+import { MAX_INTERVIEW_QUESTIONS, buildSteps } from '@/lib/steps';
 
 export default function IcebreakingPage() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -17,16 +18,8 @@ export default function IcebreakingPage() {
     setMounted(true);
   }, []);
 
-  const steps = [
-    '아이스브레이킹',
-    '질문 1',
-    '질문 2',
-    '질문 3',
-    '질문 4',
-    '질문 5',
-    '질문 6',
-    '최종 평가'
-  ];
+  // 이 단계에서는 아직 질문을 고르기 전이라 실제 개수를 모른다. 상한을 자리표시자로 쓴다.
+  const steps = buildSteps(MAX_INTERVIEW_QUESTIONS);
 
   const icebreakerQuestions = [
     "오늘 아침 어떻게 시작하셨어요?",

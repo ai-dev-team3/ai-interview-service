@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from 'react';
+import { buildSteps } from '@/lib/steps';
 
 type EvaluationResult = {
     session_id: number;
@@ -30,25 +31,25 @@ type EvaluationResult = {
 type Props = {
     result: EvaluationResult;
     nextLink: string;
+    totalQuestions: number;
 };
 
-export default function QuestionClientResultPage({ result, nextLink }: Props ) {
+export default function QuestionClientResultPage({ result, nextLink, totalQuestions }: Props ) {
     const {user} = useUser()
     const userNickname = user?.nickname ?? '사용자';
 
     const searchParams = useSearchParams()
     const questionFromParam = searchParams.get('question')
-    const question = questionFromParam || '자기소개를 해주세요.';
+    const question = questionFromParam || result?.question || '질문';
     const questionId = searchParams.get('questionId');
     const isFinalStep = nextLink?.startsWith('/today-interview/final-report');
     let currentStep = 1;
-    if (nextLink.includes('/today-interview/')) {
+    if (isFinalStep) {
+        currentStep = totalQuestions;
+    } else {
         const match = nextLink.match(/\/today-interview\/(\d+)/);
         if (match) {
-            const nextId = parseInt(match[1], 10);
-            currentStep = nextId - 1;
-        } else if (nextLink.startsWith('/today-interview/final-report')) {
-            currentStep = 6;
+            currentStep = parseInt(match[1], 10) - 1;
         }
     }
 
@@ -231,16 +232,7 @@ export default function QuestionClientResultPage({ result, nextLink }: Props ) {
     };
 
     // 단계 정의
-    const steps = [
-        '아이스브레이킹',
-        '질문 1',
-        '질문 2',
-        '질문 3',
-        '질문 4',
-        '질문 5',
-        '질문 6',
-        '최종 평가'
-    ];
+    const steps = buildSteps(totalQuestions);
     useEffect(() => {
     }, []);
     return (
@@ -559,7 +551,7 @@ export default function QuestionClientResultPage({ result, nextLink }: Props ) {
                         </Link>
                     ) : (
                         <Link
-                            href={`/today-interview/make-question?next=${encodeURIComponent(nextLink)}`}
+                            href={nextLink}
                             className="px-8 py-4 bg-[#6ce5e8] text-white rounded-full font-semibold hover:bg-[#6ce5e8]/90 transition-colors cursor-pointer whitespace-nowrap"
                         >
                             다음 질문으로 이동
