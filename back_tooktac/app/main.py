@@ -1,4 +1,6 @@
 import logging
+import threading
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -10,6 +12,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
+
+logger = logging.getLogger(__name__)
 
 from app.config import CORS_ALLOWED_ORIGINS, validate_settings
 
@@ -29,7 +33,33 @@ from app.api import interview_schedule_router
 import app.repository.model_registry
 
 
-app = FastAPI()
+def _warm_up_embedding_models() -> None:
+    """답변 평가에 쓰는 임베딩 모델 2개를 미리 올린다.
+
+    로드에 6초쯤 걸리는데, 이걸 첫 답변 제출 때 하면 그 사용자가 비용을 뒤집어쓴다.
+    서버를 막지 않도록 백그라운드 스레드에서 올린다. 사용자는 준비 30초 +
+    답변 90초를 거친 뒤에야 이 모델을 쓰므로 그 전에 끝난다.
+    """
+    import time
+
+    from app.services.speech.answer_pipeline import get_orchestrator_singleton
+
+    started = time.perf_counter()
+    try:
+        get_orchestrator_singleton()
+    except Exception:
+        logger.warning("임베딩 모델 워밍업 실패 — 첫 답변 때 다시 로드한다", exc_info=True)
+        return
+    logger.info("임베딩 모델 워밍업 완료 (%.1f초)", time.perf_counter() - started)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    threading.Thread(target=_warm_up_embedding_models, name="model-warmup", daemon=True).start()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 origins = CORS_ALLOWED_ORIGINS
 
