@@ -78,7 +78,7 @@ class ReportBuilder:
             # 4영역 평균 점수들
             'area_scores': aggregated_scores['area_scores'],
 
-            # 6개 질문별 상세 점수들 (요약 포함)
+            # 질문별 상세 점수들 (요약 포함)
             'question_scores': enhanced_question_scores,
 
             # LLM이 생성한 AI 조언들

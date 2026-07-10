@@ -29,7 +29,7 @@ _PERSONALIZED_TEMPLATE = """
 """
 
 _STRENGTHS_TEMPLATE = """
-{user_nickname}님의 6개 질문 면접 분석 결과를 종합해서 TOP 3 강점을 선정해주세요.
+{user_nickname}님의 {total_questions}개 질문 면접 분석 결과를 종합해서 TOP 3 강점을 선정해주세요.
 
 강점top3:
 {analysis_summary}
@@ -50,7 +50,7 @@ _STRENGTHS_TEMPLATE = """
 """
 
 _IMPROVEMENTS_TEMPLATE = """
-{user_nickname}님의 6개 질문 면접 분석 결과를 종합해서 우선순위별 TOP 3 개선점을 선정해주세요.
+{user_nickname}님의 {total_questions}개 질문 면접 분석 결과를 종합해서 우선순위별 TOP 3 개선점을 선정해주세요.
 
 개선점top3:
 {analysis_summary}
@@ -141,6 +141,7 @@ class GeminiAdvisor:
             "question_summary": self._prepare_question_summary(question_analyses),
             "total_evaluation": aggregated_scores["total_evaluation"],
             "user_nickname": user_nickname,
+            "total_questions": len(question_analyses),
         }
         return self._advice_graph.invoke(context)
 
@@ -157,12 +158,14 @@ class GeminiAdvisor:
         return self._strengths_chain.invoke({
             "user_nickname": context["user_nickname"],
             "analysis_summary": context["analysis_summary"],
+            "total_questions": context["total_questions"],
         })
 
     def _run_improvements(self, context: Dict) -> List[Dict]:
         return self._improvements_chain.invoke({
             "user_nickname": context["user_nickname"],
             "analysis_summary": context["analysis_summary"],
+            "total_questions": context["total_questions"],
         })
 
     def _run_summaries(self, context: Dict) -> List[str]:
