@@ -93,6 +93,7 @@ async def expression_socket(websocket: WebSocket):
     user_id: int | None = None
     question_order: int | None = None
     explicit_session_id: int | None = None
+    frames = 0
 
     db: Session = next(get_db())
     try:
@@ -114,6 +115,16 @@ async def expression_socket(websocket: WebSocket):
 
             try:
                 kind = payload_kind(data)
+                if frames == 0:
+                    # 사용자가 어느 경로를 타는지 남긴다. 성공 시 로그가 전혀 없으면
+                    # 프레임이 도착했는지조차 알 수 없다.
+                    path = "랜드마크(브라우저 추론)" if kind == KIND_LANDMARKS else "JPEG(서버 추론)"
+                    logger.info(
+                        "자세 분석 경로=%s (user_id=%s, question_order=%s)",
+                        path, user_id, question_order,
+                    )
+                frames += 1
+
                 if kind == KIND_LANDMARKS:
                     # 기본 경로: 브라우저가 이미 추론을 끝냈다. 판정만 한다(수 마이크로초).
                     face, pose = parse_landmarks(data)
@@ -139,6 +150,7 @@ async def expression_socket(websocket: WebSocket):
             await websocket.send_json({"expression": to_feedback(step)})
 
     except WebSocketDisconnect:
+        logger.info("영상 소켓 종료 (question_order=%s, 처리 프레임=%d)", question_order, frames)
         # 연결 종료 시 이 질문의 최종 결과 저장 (인증/파라미터 확보 전이면 스킵)
         if user_id is not None and question_order is not None:
             _save_video_result(db, user_id, question_order, posture_state, explicit_session_id)

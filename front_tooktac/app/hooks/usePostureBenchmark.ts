@@ -40,7 +40,7 @@ export function usePostureBenchmark(enabled: boolean) {
                     let elapsedMs: number;
                     try {
                         drawMirrored(canvas, video);
-                        elapsedMs = detect(landmarkers, canvas, performance.now()).elapsedMs;
+                        elapsedMs = detect(landmarkers, canvas).elapsedMs;
                     } catch (e) {
                         console.warn('[posture] 벤치마크 추론 실패 — 서버 모드', e);
                         setPostureMode('server');

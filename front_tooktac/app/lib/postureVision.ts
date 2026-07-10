@@ -99,12 +99,22 @@ export type Detection = {
     elapsedMs: number;
 };
 
-export function detect(
-    landmarkers: Landmarkers,
-    source: HTMLCanvasElement,
-    timestampMs: number,
-): Detection {
+// detectForVideo 는 인접 호출 간 타임스탬프가 단조 증가해야 한다.
+// performance.now() 는 해상도 한계로 같은 값을 연달아 돌려줄 수 있고,
+// 랜드마커는 여러 훅이 공유하는 캐시라 호출 시점을 통제할 수 없다.
+// 그래서 여기서 엄격히 증가시킨다. 같은 값이면 MediaPipe 가 예외를 던진다.
+let lastTimestampMs = 0;
+
+function nextTimestamp(): number {
+    const now = performance.now();
+    lastTimestampMs = now > lastTimestampMs ? now : lastTimestampMs + 1;
+    return lastTimestampMs;
+}
+
+export function detect(landmarkers: Landmarkers, source: HTMLCanvasElement): Detection {
+    const timestampMs = nextTimestamp();
     const started = performance.now();
+    // 얼굴과 포즈는 별도 그래프이므로 같은 타임스탬프를 써도 된다.
     const faceResult = landmarkers.face.detectForVideo(source, timestampMs);
     const poseResult = landmarkers.pose.detectForVideo(source, timestampMs);
     return {

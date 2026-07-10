@@ -65,7 +65,7 @@ export function useExpressionSocket({
         const sendLandmarks = () => {
             // 서버는 랜드마크 경로에서 cv2.flip 을 하지 않는다. 여기서 뒤집어 추론한다.
             drawMirrored(canvas, video);
-            const { face, pose } = detect(landmarkers!, canvas, performance.now());
+            const { face, pose } = detect(landmarkers!, canvas);
             socket.send(encodeLandmarks(face, pose));
         };
 
