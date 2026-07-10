@@ -1,11 +1,11 @@
 // app/api/api.ts
 
 import axios from 'axios';
-import { useUser } from '@/contexts/UserContext'
+import { getBackendHttpBaseUrl } from '@/lib/env';
 
 // ✅ 기본 axios 인스턴스 생성
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || '/api',
+  baseURL: getBackendHttpBaseUrl(),
   withCredentials: true, // 필요에 따라 (예: 쿠키 인증 시)
   headers: {
     'Accept': 'application/json',

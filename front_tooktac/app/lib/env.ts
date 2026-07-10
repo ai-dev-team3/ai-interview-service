@@ -11,3 +11,28 @@ export function requireEnv(name: string, value: string | undefined): string {
   }
   return value;
 }
+
+export function getBackendHttpBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+
+  return "http://localhost:8000";
+}
+
+export function getBackendWsUrl(path: string, configuredUrl?: string): string {
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  if (typeof window !== "undefined") {
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    return `${protocol}://${window.location.hostname}:8000${path}`;
+  }
+
+  return `ws://localhost:8000${path}`;
+}
