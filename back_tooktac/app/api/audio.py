@@ -71,6 +71,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # 6) 오디오 수신
         data = await websocket.receive_bytes()
+        logger.info("오디오 수신 %.0f KB (question_id=%s)", len(data) / 1024, question.id)
         if not data:
             _save_minimal_result(db, user_id, session.id, question, reason="빈 오디오")
             await websocket.send_json({"transcript": "", "feedback": _empty_feedback("오디오 데이터가 없습니다.")})
@@ -157,10 +158,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
         await websocket.send_json({"transcript": text_clean, "feedback": sf})
 
-    except WebSocketDisconnect:
-        # 오디오를 다 받기 전에 끊기는 일이 실제로 있다(프론트가 소켓을 조기에 닫는 경우).
+    except WebSocketDisconnect as disconnect:
+        # 오디오를 다 받기 전에 끊기는 일이 실제로 있다.
+        # code=1009는 메시지가 uvicorn의 --ws-max-size(기본 16MB)를 넘었다는 뜻이다.
         # 결과 행을 남기지 않으면 /result/full이 영원히 processing을 반환해 무한 로딩이 된다.
-        logger.info("WebSocket disconnected")
+        logger.info("WebSocket disconnected (code=%s, reason=%r)", disconnect.code, disconnect.reason)
         _save_result_if_missing(db, user_id, session, question, reason="연결이 끊김")
     except Exception as e:
         logger.exception("음성 답변 처리 중 오류 발생")

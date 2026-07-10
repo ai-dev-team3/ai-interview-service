@@ -11,7 +11,20 @@ interface UseSttSocketProps {
 }
 
 const MAX_ANSWER_MS = 90_000;
-const MIME_TYPE = "video/webm;codecs=vp8,opus";
+
+// 서버는 ffmpeg로 wav(16kHz 모노)만 뽑아 쓰고 영상은 버린다.
+// 예전에는 video/webm으로 영상까지 녹화해 올렸는데, 90초짜리 vp8 영상이
+// uvicorn의 WebSocket 메시지 상한(16MB)을 넘겨 전송이 끊겼다.
+const AUDIO_MIME_TYPES = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+];
+
+function pickMimeType(): string | undefined {
+    if (typeof MediaRecorder === "undefined") return undefined;
+    return AUDIO_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
+}
 
 export function useSttSocket({ isAnswerActive, questionId, onTranscriptUpdate, onFeedbackUpdate }: UseSttSocketProps) {
     const recorderRef = useRef<MediaRecorder | null>(null);
@@ -31,13 +44,17 @@ export function useSttSocket({ isAnswerActive, questionId, onTranscriptUpdate, o
             if (recorder && recorder.state !== "inactive") recorder.stop();
         };
 
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+        const mimeType = pickMimeType();
+
+        // 웹캠 미리보기는 QuestionClientPage가 따로 스트림을 연다.
+        // 여기서 video를 요청하면 카메라를 두 번 잡게 되므로 오디오만 받는다.
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
             if (cancelled) {
                 stream.getTracks().forEach(track => track.stop());
                 return;
             }
 
-            const recorder = new MediaRecorder(stream, { mimeType: MIME_TYPE });
+            const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
             recorderRef.current = recorder;
 
             recorder.ondataavailable = (e) => {
@@ -50,9 +67,10 @@ export function useSttSocket({ isAnswerActive, questionId, onTranscriptUpdate, o
                 // 마이크·카메라를 놓아준다. 안 하면 다음 질문까지 켜진 채로 남는다.
                 stream.getTracks().forEach(track => track.stop());
 
-                const blob = new Blob(chunksRef.current, { type: MIME_TYPE });
+                const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
                 chunksRef.current = [];
                 const buffer = await blob.arrayBuffer();
+                console.info(`답변 녹음 전송: ${(buffer.byteLength / 1024).toFixed(0)} KB`);
 
                 const sessionId = getInterviewSessionId();
                 const sessionQuery = sessionId ? `&session_id=${sessionId}` : "";
