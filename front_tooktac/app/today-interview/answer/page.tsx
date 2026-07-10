@@ -23,9 +23,12 @@ function AnswerPageContent() {
 
   const router = useRouter();
 
+  // 아이스브레이킹은 question_order=0 이라 영상 결과가 저장되지 않는다(video.py:_save_video_result).
+  // 점수에 영향이 없으므로 여기서 클라이언트 추론 성능을 재고 면접 전체에 쓸 모드를 정한다.
   useExpressionSocket({
     isAnswerActive,
     questionId: "0",
+    benchmark: true,
     setGazeActive,
     setPostureActive,
     setHandActive
