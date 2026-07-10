@@ -4,18 +4,16 @@ from sqlalchemy.orm import Session
 from app.repository.database import SessionLocal
 from app.repository.resume import Resume
 from app.services.text.document_parser import VertexDocumentParser
-from dotenv import load_dotenv
-
-load_dotenv()
+from app.core.config import settings
 
 def structure_resume_background(file_path: str, user_id: int):
     """이력서 구조화 및 DB 반영을 백그라운드에서 수행"""
     try:
         parser = VertexDocumentParser(
-            project_id=os.getenv("PROJECT_ID"),
-            location=os.getenv("LOCATION", "us"),
-            processor_id=os.getenv("PROCESSOR_ID"),
-            gemini_api_key=os.getenv("GOOGLE_API_KEY")
+            project_id=settings.PROJECT_ID,
+            location=settings.LOCATION,
+            processor_id=settings.PROCESSOR_ID,
+            gemini_api_key=settings.GOOGLE_API_KEY
         )
 
         parsed = parser.parse_document(file_path)

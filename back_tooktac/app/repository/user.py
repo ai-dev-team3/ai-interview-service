@@ -25,3 +25,7 @@ class User(Base):
     video_results = relationship("VideoEvaluationResult", back_populates="user")
     final_reports = relationship("FinalReportSummary", back_populates="user")
     sessions = relationship("InterviewSession", back_populates="user")
+    
+    final_reports = relationship("FinalReportSummary", back_populates="user")
+    sessions = relationship("InterviewSession", back_populates="user")
+    cover_letter_feedbacks = relationship("CoverLetterFeedback", back_populates="user", cascade="all, delete-orphan")

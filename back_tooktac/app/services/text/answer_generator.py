@@ -1,11 +1,11 @@
 from openai import OpenAI
-from dotenv import load_dotenv
-load_dotenv()
+
+from app.core.config import settings
 
 class ModelAnswerGenerator:
 
     def __init__(self):
-        self.client = OpenAI()
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     def generate_technical_answer(self, question: str) -> str:
         system_msg = {

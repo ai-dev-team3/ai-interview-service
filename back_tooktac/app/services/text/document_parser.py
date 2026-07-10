@@ -13,19 +13,10 @@ from app.services.extrack.hwpx_extractor import hwpx_to_html
 from app.services.extrack.docx_extractor import extract_text_from_docx
 
 
-from dotenv import load_dotenv
-import os
+from app.core.config import settings
 
-load_dotenv()
-
-
-gemini_api_key = os.getenv('GOOGLE_API_KEY')
+gemini_api_key = settings.GOOGLE_API_KEY
 genai.configure(api_key=gemini_api_key)
-
-project_id = os.getenv("PROJECT_ID")
-processor_id = os.getenv("PROCESSOR_ID")
-location = os.getenv("LOCATION", "us")
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
 class VertexDocumentParser:
     """Vertex AI Document AI와 Gemini를 사용한 문서 파싱 및 구조화 클래스"""

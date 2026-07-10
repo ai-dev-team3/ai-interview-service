@@ -1,7 +1,7 @@
 from openai import OpenAI
-from dotenv import load_dotenv
 import json
-load_dotenv()
+
+from app.core.config import settings
 
 class AnswerEvaluator:
     INTERVIEWER_PERSONA = """
@@ -14,7 +14,7 @@ class AnswerEvaluator:
 """
 
     def __init__(self):
-        self.client = OpenAI()
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     def evaluate(self, question: str, user_answer: str, evaluation_type: str) -> dict:
         if evaluation_type == "technical":

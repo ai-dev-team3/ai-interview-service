@@ -1,11 +1,8 @@
 # app/utils/auth_ws.py
 from fastapi import WebSocket, status, WebSocketException
 from app.core.security import decode_access_token
+from app.core.config import settings
 from jose import ExpiredSignatureError, JWTError, jwt
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # async def get_user_id_from_websocket(websocket: WebSocket) -> int:
 #     # 1. 쿠키에서 access_token 추출
@@ -38,7 +35,7 @@ load_dotenv()
 
 # app/utils/auth_ws.py
 
-SECRET = os.getenv("JWT_SECRET_KEY", "your-secret-key")
+SECRET = settings.JWT_SECRET_KEY
 ALGS = ["HS256"]
 
 async def get_user_id_from_websocket(ws: WebSocket) -> int:

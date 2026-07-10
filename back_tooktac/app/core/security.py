@@ -1,11 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from dotenv import load_dotenv
-import os
+from app.core.config import settings
 
-load_dotenv()
-
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")
+SECRET_KEY = settings.JWT_SECRET_KEY
 ALGORITHM = "HS256"
 
 def create_access_token(user_id: int, expires_delta: timedelta = timedelta(hours=12)) -> str:

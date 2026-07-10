@@ -9,18 +9,10 @@ from typing import Dict, List, Union
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
-from dotenv import load_dotenv
-import os
+from app.core.config import settings
 
-load_dotenv()
-
-gemini_api_key = os.getenv('GOOGLE_API_KEY')
+gemini_api_key = settings.GOOGLE_API_KEY
 genai.configure(api_key=gemini_api_key)
-
-project_id = os.getenv("PROJECT_ID")
-processor_id = os.getenv("PROCESSOR_ID")
-location = os.getenv("LOCATION", "us")
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
 
 # %%
