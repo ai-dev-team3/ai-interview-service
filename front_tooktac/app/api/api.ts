@@ -1,11 +1,11 @@
 // app/api/api.ts
 
 import axios from 'axios';
-import { useUser } from '@/contexts/UserContext'
+import { getBackendHttpBaseUrl } from '@/lib/env';
 
 // ✅ 기본 axios 인스턴스 생성
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || '/api',
+  baseURL: getBackendHttpBaseUrl(),
   withCredentials: true, // 필요에 따라 (예: 쿠키 인증 시)
   headers: {
     'Accept': 'application/json',
@@ -47,6 +47,32 @@ export const checkAuth = async () => {
   return response.data;
 };
 
+export type AccountInfo = {
+  user_id: number;
+  username: string;
+  nickname: string;
+  email: string | null;
+  desired_job: string;
+};
+
+export const getAccount = async (): Promise<AccountInfo> => {
+  const response = await api.get('/account');
+  return response.data;
+};
+
+export const changePassword = async (payload: {
+  current_password: string;
+  new_password: string;
+}) => {
+  const response = await api.patch('/account/password', payload);
+  return response.data;
+};
+
+export const deleteAccount = async () => {
+  const response = await api.delete('/account');
+  return response.data;
+};
+
 // 이력서 등록/갱신 (클라이언트에서 추출한 텍스트 전송)
 export const uploadResume = async (resumeText: string, filename?: string) => {
   const form = new FormData();
@@ -60,6 +86,25 @@ export const uploadResume = async (resumeText: string, filename?: string) => {
 export const getResumeStatus = async (): Promise<{ has_resume: boolean }> => {
   const response = await api.get('/resume/status');
   return response.data;
+};
+
+export type InterviewSchedule = {
+  id: number;
+  scheduled_at: string;
+  description: string | null;
+};
+
+export const getInterviewSchedules = async (): Promise<InterviewSchedule[]> => {
+  const response = await api.get('/interview-schedules');
+  return response.data.data;
+};
+
+export const createInterviewSchedule = async (payload: {
+  scheduled_at: string;
+  description?: string;
+}): Promise<InterviewSchedule> => {
+  const response = await api.post('/interview-schedules', payload);
+  return response.data.data;
 };
 
 // 진행 중인 면접 세션 ID 저장/조회 (탭·재시작 간 혼선 방지용으로 백엔드에 명시 전달)

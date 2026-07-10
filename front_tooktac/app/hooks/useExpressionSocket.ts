@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { getInterviewSessionId } from "@/api/api";
-import { requireEnv } from "@/lib/env";
+import { getBackendWsUrl } from "@/lib/env";
 
 interface UseExpressionSocketProps {
     isAnswerActive: boolean;
@@ -25,7 +25,7 @@ export function useExpressionSocket({ isAnswerActive, questionId, setGazeActive,
         if (isAnswerActive && video) {
             const sessionId = getInterviewSessionId();
             const sessionQuery = sessionId ? `&session_id=${sessionId}` : "";
-            const wsUrl = requireEnv("NEXT_PUBLIC_EXPRESSION_WS_URL", process.env.NEXT_PUBLIC_EXPRESSION_WS_URL);
+            const wsUrl = getBackendWsUrl("/ws/expression", process.env.NEXT_PUBLIC_EXPRESSION_WS_URL);
             socket = new WebSocket(
                 `${wsUrl}?question_id=${questionId}${sessionQuery}`
             );
