@@ -44,8 +44,10 @@ type Report = {
     poseFound: boolean;
     hasMatrix: boolean;
     pitchDeg: number | null;
-    coordRange: string;
+    noseXY: string;
+    coordBounds: string;
     visibilitySample: string;
+    visibilityMax: string;
     payloadBytes: number;
     binaryBytes: number;
 };
@@ -77,6 +79,9 @@ export default function MediaPipeProbePage() {
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const forcedDelegate = params?.get('delegate')?.toUpperCase() === 'CPU' ? 'CPU' : 'GPU';
     const mirror = params?.get('mirror') !== '0';
+
+    // 한 프레임 값이 아니라 관측된 전체 범위를 누적해야 정규화 여부를 확인할 수 있다
+    const bounds = useRef({ minX: 1, maxX: 0, minY: 1, maxY: 0, maxVis: 0 });
 
     const load = useCallback(async (delegate: 'GPU' | 'CPU') => {
         const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
@@ -173,6 +178,26 @@ export default function MediaPipeProbePage() {
                     const binaryBytes = (FACE_INDICES.length + POSE_INDICES.length) * 3 * 4;
                     const payloadBytes = jsonBytes;
 
+                    // 실제로 서버로 보낼 18개 랜드마크의 좌표 범위를 누적한다
+                    const b = bounds.current;
+                    const track = (lms: NormalizedLandmark[] | undefined, idx: number[]) => {
+                        if (!lms) return;
+                        for (const i of idx) {
+                            const l = lms[i];
+                            if (!l) continue;
+                            if (l.x < b.minX) b.minX = l.x;
+                            if (l.x > b.maxX) b.maxX = l.x;
+                            if (l.y < b.minY) b.minY = l.y;
+                            if (l.y > b.maxY) b.maxY = l.y;
+                        }
+                    };
+                    track(faceLm, FACE_INDICES);
+                    track(poseLm, POSE_INDICES);
+                    if (poseLm) {
+                        const vis = Math.max(poseLm[19]?.visibility ?? 0, poseLm[20]?.visibility ?? 0);
+                        if (vis > b.maxVis) b.maxVis = vis;
+                    }
+
                     const totalMs = t2 - t0;
                     setSamples((prev) => [...prev.slice(-29), totalMs]);
                     setReport({
@@ -185,12 +210,14 @@ export default function MediaPipeProbePage() {
                         poseFound: !!poseLm,
                         hasMatrix: !!matrix,
                         pitchDeg: matrix ? +pitchFromMatrix(matrix.data).toFixed(1) : null,
-                        coordRange: faceLm
-                            ? `x=${faceLm[1].x.toFixed(3)} y=${faceLm[1].y.toFixed(3)} (0~1이면 정규화)`
+                        noseXY: faceLm
+                            ? `x=${faceLm[1].x.toFixed(3)} y=${faceLm[1].y.toFixed(3)}`
                             : '-',
+                        coordBounds: `x ${b.minX.toFixed(3)}~${b.maxX.toFixed(3)}  y ${b.minY.toFixed(3)}~${b.maxY.toFixed(3)}`,
                         visibilitySample: poseLm
                             ? `LEFT_INDEX=${poseLm[19]?.visibility.toFixed(3)} RIGHT_INDEX=${poseLm[20]?.visibility.toFixed(3)}`
                             : '-',
+                        visibilityMax: b.maxVis.toFixed(3),
                         payloadBytes,
                         binaryBytes,
                     });
@@ -240,8 +267,16 @@ export default function MediaPipeProbePage() {
                     <Row label="포즈 감지" value={String(report.poseFound)} />
                     <Row label="변환 행렬 제공" value={String(report.hasMatrix)} />
                     <Row label="행렬에서 뽑은 피치" value={report.pitchDeg === null ? '-' : `${report.pitchDeg}°`} />
-                    <Row label="좌표 범위" value={report.coordRange} />
-                    <Row label="visibility 샘플" value={report.visibilitySample} />
+                    <Row label="코끝 좌표 (매 프레임 변함, 정상)" value={report.noseXY} />
+                    <Row
+                        label="18개 좌표의 누적 범위 (0~1 밖이면 정규화 아님)"
+                        value={report.coordBounds}
+                    />
+                    <Row label="visibility 현재값 (손 내리면 낮음, 정상)" value={report.visibilitySample} />
+                    <Row
+                        label="visibility 누적 최댓값 (손 들면 0.5 넘어야 함)"
+                        value={report.visibilityMax}
+                    />
                     <Row label="랜드마크 18개 (JSON)" value={`${report.payloadBytes} bytes/frame`} />
                     <Row label="랜드마크 18개 (Float32 바이너리)" value={`${report.binaryBytes} bytes/frame`} />
                     <Row
