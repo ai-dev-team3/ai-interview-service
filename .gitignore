@@ -121,3 +121,6 @@ uploads/
 media/
 
 .claude/*
+
+# @mediapipe/tasks-vision 의 wasm 런타임 (33MB) — prepare-wasm 스크립트가 복사한다
+front_tooktac/public/mediapipe/
