@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import QuestionClientLoadingPage from "@/today-interview/[questionId]/QuestionClientLoadingPage";
 import { useExpressionSocket } from "@/hooks/useExpressionSocket";
+import { useWebcamPreview } from "@/hooks/useWebcamPreview";
 
 function AnswerPageContent() {
   const searchParams = useSearchParams();
@@ -63,23 +64,7 @@ function AnswerPageContent() {
     return () => clearInterval(interval);
   }, [isAnswerActive, answerTime]);
 
-  useEffect(() => {
-    const videoElement = document.getElementById("webcam-video") as HTMLVideoElement;
-    if (!videoElement) return;
-
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        .then((stream) => {
-          videoElement.srcObject = stream;
-        })
-        .catch((err) => {
-          console.error("웹캠 접근 실패:", err);
-        });
-
-    return () => {
-      const tracks = (videoElement.srcObject as MediaStream)?.getTracks?.();
-      tracks?.forEach((track) => track.stop());
-    };
-  }, []);
+  useWebcamPreview();
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
