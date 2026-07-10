@@ -12,9 +12,24 @@ export default function InterviewSetupPage() {
     const video = document.getElementById('webcam-video') as HTMLVideoElement;
     if (!video) return;
 
+    let cancelled = false;
+    // 점검용으로 연 스트림은 반드시 붙잡아 뒀다가 정리한다.
+    // 마이크 스트림을 버리면 참조가 없어 끌 수가 없고, 탭을 닫을 때까지 켜져 있다.
+    const streams: MediaStream[] = [];
+
+    const keep = (stream: MediaStream): boolean => {
+      if (cancelled) {
+        stream.getTracks().forEach(track => track.stop());
+        return false;
+      }
+      streams.push(stream);
+      return true;
+    };
+
     // 카메라 확인
     navigator.mediaDevices.getUserMedia({ video: true })
         .then((stream) => {
+          if (!keep(stream)) return;
           video.srcObject = stream;
           setCameraConnected(true);
         })
@@ -22,7 +37,10 @@ export default function InterviewSetupPage() {
 
     // 마이크 확인
     navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(() => setMicConnected(true))
+        .then((stream) => {
+          if (!keep(stream)) return;
+          setMicConnected(true);
+        })
         .catch(() => setMicConnected(false));
 
     // 스피커 확인 (출력 장치 존재 여부)
@@ -33,8 +51,9 @@ export default function InterviewSetupPage() {
         });
 
     return () => {
-      const tracks = (video.srcObject as MediaStream)?.getTracks?.();
-      tracks?.forEach(track => track.stop());
+      cancelled = true;
+      streams.forEach(stream => stream.getTracks().forEach(track => track.stop()));
+      video.srcObject = null;
     };
   }, []);
 

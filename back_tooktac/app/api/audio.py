@@ -26,6 +26,10 @@ async def websocket_endpoint(websocket: WebSocket):
     db: Session | None = None
     webm_path = None
     wav_path = None
+    # 예외/연결 끊김 처리에서 최소 결과를 남기려면 여기서 선초기화해야 한다
+    user_id: int | None = None
+    session = None
+    question = None
 
     try:
         # 1) 인증
@@ -67,6 +71,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # 6) 오디오 수신
         data = await websocket.receive_bytes()
+        logger.info("오디오 수신 %.0f KB (question_id=%s)", len(data) / 1024, question.id)
         if not data:
             _save_minimal_result(db, user_id, session.id, question, reason="빈 오디오")
             await websocket.send_json({"transcript": "", "feedback": _empty_feedback("오디오 데이터가 없습니다.")})
@@ -153,12 +158,17 @@ async def websocket_endpoint(websocket: WebSocket):
 
         await websocket.send_json({"transcript": text_clean, "feedback": sf})
 
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected")
+    except WebSocketDisconnect as disconnect:
+        # 오디오를 다 받기 전에 끊기는 일이 실제로 있다.
+        # code=1009는 메시지가 uvicorn의 --ws-max-size(기본 16MB)를 넘었다는 뜻이다.
+        # 결과 행을 남기지 않으면 /result/full이 영원히 processing을 반환해 무한 로딩이 된다.
+        logger.info("WebSocket disconnected (code=%s, reason=%r)", disconnect.code, disconnect.reason)
+        _save_result_if_missing(db, user_id, session, question, reason="연결이 끊김")
     except Exception as e:
         logger.exception("음성 답변 처리 중 오류 발생")
         if db is not None:
             db.rollback()
+        _save_result_if_missing(db, user_id, session, question, reason=f"처리 오류({type(e).__name__})")
         try:
             await websocket.send_json({"error": f"internal_error: {type(e).__name__}"})
         except Exception:
@@ -172,6 +182,32 @@ async def websocket_endpoint(websocket: WebSocket):
                     os.remove(p)
                 except Exception:
                     pass
+
+
+def _save_result_if_missing(db: Session | None, user_id, session, question, reason: str) -> None:
+    """분석이 끝나지 못했을 때 최소 결과라도 남긴다.
+
+    EvaluationResult 행이 없으면 /result/full이 계속 status="processing"을 반환하고,
+    프론트 폴러는 그것을 "아직 분석 중"으로 읽어 멈추지 않는다. 최소 행을 남기면
+    status="failed"가 되어 사용자에게 실패가 보인다.
+
+    이미 결과가 있으면(정상 저장 후 응답 단계에서 터진 경우 등) 덮어쓰지 않는다.
+    질문을 특정하기 전에 실패했다면 남길 곳이 없으므로 조용히 넘어간다.
+    """
+    if db is None or user_id is None or session is None or question is None:
+        return
+
+    try:
+        already_saved = (
+            db.query(EvaluationResult).filter_by(question_id=question.id).first() is not None
+        )
+        if already_saved:
+            return
+        _save_minimal_result(db, user_id, session.id, question, reason=reason)
+        logger.info("최소 결과 저장 (question_id=%s, reason=%s)", question.id, reason)
+    except Exception:
+        logger.exception("최소 결과 저장 실패 (question_id=%s)", question.id)
+        db.rollback()
 
 
 def _save_answer(db: Session, session_id: int, question, user_id: int, text: str) -> None:
