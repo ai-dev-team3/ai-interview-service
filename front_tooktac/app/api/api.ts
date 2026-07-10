@@ -1,11 +1,11 @@
 // app/api/api.ts
 
 import axios from 'axios';
-import { useUser } from '@/contexts/UserContext'
+import { getBackendHttpBaseUrl } from '@/lib/env';
 
 // ✅ 기본 axios 인스턴스 생성
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || '/api',
+  baseURL: getBackendHttpBaseUrl(),
   withCredentials: true, // 필요에 따라 (예: 쿠키 인증 시)
   headers: {
     'Accept': 'application/json',
@@ -44,6 +44,32 @@ export const checkUsername = async (username: string) => {
 
 export const checkAuth = async () => {
   const response = await api.get('/me');
+  return response.data;
+};
+
+export type AccountInfo = {
+  user_id: number;
+  username: string;
+  nickname: string;
+  email: string | null;
+  desired_job: string;
+};
+
+export const getAccount = async (): Promise<AccountInfo> => {
+  const response = await api.get('/account');
+  return response.data;
+};
+
+export const changePassword = async (payload: {
+  current_password: string;
+  new_password: string;
+}) => {
+  const response = await api.patch('/account/password', payload);
+  return response.data;
+};
+
+export const deleteAccount = async () => {
+  const response = await api.delete('/account');
   return response.data;
 };
 
@@ -89,6 +115,27 @@ export const updateResumeQuestion = async (id: number, questionText: string): Pr
 
 export const deleteResumeQuestion = async (id: number): Promise<void> => {
   await api.delete(`/resume/questions/${id}`);
+};
+
+// ---------- 면접 일정 ----------
+
+export type InterviewSchedule = {
+  id: number;
+  scheduled_at: string;
+  description: string | null;
+};
+
+export const getInterviewSchedules = async (): Promise<InterviewSchedule[]> => {
+  const response = await api.get('/interview-schedules');
+  return response.data.data;
+};
+
+export const createInterviewSchedule = async (payload: {
+  scheduled_at: string;
+  description?: string;
+}): Promise<InterviewSchedule> => {
+  const response = await api.post('/interview-schedules', payload);
+  return response.data.data;
 };
 
 // ---------- 면접 세션 ----------
