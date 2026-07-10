@@ -1,7 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import api, { uploadResume, getResumeStatus } from '@/api/api';
+import api, {
+  uploadResume,
+  getResumeStatus,
+  getInterviewSchedules,
+  createInterviewSchedule,
+  type InterviewSchedule,
+} from '@/api/api';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import ResumeUploader from '@/components/ResumeUploader';
 
@@ -26,6 +32,16 @@ const fmtYMD = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
+const formatScheduleDate = (value: string) => {
+  const d = new Date(value);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+};
+
+const sortSchedules = (schedules: InterviewSchedule[]) =>
+  [...schedules].sort(
+    (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+  );
+
 export default function MyPage() {
   // 현재 보이는 기준 월 (초기값: 오늘)
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -36,8 +52,28 @@ export default function MyPage() {
   const [trainedDays, setTrainDays] = useState<number>(0);
   const [dayIndexByDate, setDayIndexByDate] = useState<Record<string, number>>({});
 
-  // 예시 면접 예정일(필요 시 서버 값으로 교체)
-  const [interviewDate] = useState<Date | null>(new Date(2025, 9, 12)); // 2025-08-13
+  // 면접 일정 상태
+  const [interviewSchedules, setInterviewSchedules] = useState<InterviewSchedule[]>([]);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState(fmtYMD(new Date()));
+  const [scheduleDescription, setScheduleDescription] = useState('');
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const schedulesWithinMonth = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const monthLater = new Date(today);
+    monthLater.setMonth(monthLater.getMonth() + 1);
+
+    return sortSchedules(interviewSchedules).filter((schedule) => {
+      const scheduledAt = new Date(schedule.scheduled_at);
+      return scheduledAt >= today && scheduledAt <= monthLater;
+    });
+  }, [interviewSchedules]);
+  const interviewDateSet = useMemo(
+    () => new Set(interviewSchedules.map((schedule) => fmtYMD(new Date(schedule.scheduled_at)))),
+    [interviewSchedules]
+  );
 
   // 이력서 등록 상태
   const [hasResume, setHasResume] = useState<boolean | null>(null);
@@ -91,6 +127,41 @@ export default function MyPage() {
     }
   };
 
+  const openScheduleModal = () => {
+    setScheduleDate(fmtYMD(new Date()));
+    setScheduleDescription('');
+    setIsScheduleModalOpen(true);
+  };
+
+  const closeScheduleModal = () => {
+    if (scheduleSaving) return;
+    setIsScheduleModalOpen(false);
+  };
+
+  const handleScheduleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!scheduleDate) {
+      setToast('면접 날짜를 선택해주세요.');
+      return;
+    }
+
+    setScheduleSaving(true);
+    try {
+      const saved = await createInterviewSchedule({
+        scheduled_at: scheduleDate,
+        description: scheduleDescription.trim(),
+      });
+      setInterviewSchedules(prev => sortSchedules([...prev, saved]));
+      setCurrentDate(new Date(saved.scheduled_at));
+      setIsScheduleModalOpen(false);
+      setToast('면접 일정이 추가되었습니다.');
+    } catch {
+      setToast('면접 일정 추가에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
   // 달 이동
   const goPrevMonth = () => {
     setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -123,6 +194,19 @@ export default function MyPage() {
       }
     };
     loadCounters();
+  }, []);
+
+  // 면접 일정 로드
+  useEffect(() => {
+    const loadInterviewSchedules = async () => {
+      try {
+        const schedules = await getInterviewSchedules();
+        setInterviewSchedules(sortSchedules(schedules));
+      } catch {
+        setInterviewSchedules([]);
+      }
+    };
+    loadInterviewSchedules();
   }, []);
 
   // 요일
@@ -159,8 +243,7 @@ export default function MyPage() {
         const ymd = fmtYMD(cellDate);
         const isCurrentMonth = cellDate.getMonth() === month;
         const isStudyDay = Boolean(dayIndexByDate[ymd]); // 실제 학습한 날짜만 표시
-        const isInterviewDay =
-          interviewDate ? cellDate.getTime() === new Date(interviewDate).setHours(0, 0, 0, 0) : false;
+        const isInterviewDay = interviewDateSet.has(ymd);
 
         week.push({
           date: cellDate.getDate(),
@@ -176,7 +259,7 @@ export default function MyPage() {
     }
 
     return { weeks, year, month };
-  }, [currentDate, dayIndexByDate, interviewDate]);
+  }, [currentDate, dayIndexByDate, interviewDateSet]);
 
   return (
     <div className="min-h-screen bg-[#e7f8ff]">
@@ -184,6 +267,69 @@ export default function MyPage() {
       {toast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#27386d] text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium">
           {toast}
+        </div>
+      )}
+
+      {isScheduleModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <form
+            onSubmit={handleScheduleSubmit}
+            className="w-full max-w-md bg-white rounded-2xl p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-[#27386d]">면접 일정 추가</h2>
+              <button
+                type="button"
+                onClick={closeScheduleModal}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100"
+                aria-label="닫기"
+              >
+                <i className="ri-close-line text-xl" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="block text-sm font-medium text-[#27386d] mb-2">날짜</span>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6ce5e8] text-sm"
+                  required
+                />
+              </label>
+
+              <label className="block">
+                <span className="block text-sm font-medium text-[#27386d] mb-2">설명</span>
+                <textarea
+                  value={scheduleDescription}
+                  onChange={(e) => setScheduleDescription(e.target.value)}
+                  maxLength={255}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6ce5e8] text-sm resize-none"
+                  placeholder="예: 우수성과 공유 컨퍼런스"
+                />
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={closeScheduleModal}
+                className="px-4 py-2 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={scheduleSaving}
+                className="px-4 py-2 rounded-full bg-[#6ce5e8] text-[#27386d] text-sm font-medium hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {scheduleSaving ? '추가 중...' : '추가하기'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -239,20 +385,38 @@ export default function MyPage() {
           {/* 다음 면접 예정일 */}
           <div className="bg-white rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#27386d]">다음 면접 예정일</h2>
-              <button className="bg-[#6ce5e8] text-[#27386d] px-4 py-2 rounded-full text-sm font-medium hover:bg-opacity-90 transition-colors cursor-pointer whitespace-nowrap">
+              <h2 className="text-lg font-semibold text-[#27386d]">한 달 내 면접 일정</h2>
+              <button
+                onClick={openScheduleModal}
+                className="bg-[#6ce5e8] text-[#27386d] px-4 py-2 rounded-full text-sm font-medium hover:bg-opacity-90 transition-colors cursor-pointer whitespace-nowrap"
+              >
                 면접일정 추가하기
               </button>
             </div>
-            <div className="flex items-center justify-center space-x-3 py-4">
-              <div className="w-3 h-3 bg-[#6ce5e8] rounded-full" />
-              <span className="text-xl font-bold text-[#27386d]">
-                {interviewDate
-                  ? `${interviewDate.getFullYear()}/${interviewDate.getMonth()}/${interviewDate.getDate()}`
-                  : '미정'}
-              </span>
-              <span className="text-lg text-gray-700">우수성과 공유 컨퍼런스</span>
-            </div>
+            {schedulesWithinMonth.length > 0 ? (
+              <div className="space-y-3 py-2">
+                {schedulesWithinMonth.map((schedule) => (
+                  <div
+                    key={schedule.id}
+                    className="flex items-start gap-3 rounded-lg border border-gray-100 px-4 py-3"
+                  >
+                    <div className="mt-2 w-3 h-3 bg-[#6ce5e8] rounded-full shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-lg font-bold text-[#27386d]">
+                        {formatScheduleDate(schedule.scheduled_at)}
+                      </div>
+                      <div className="text-sm text-gray-700 break-words">
+                        {schedule.description || '등록된 설명이 없습니다.'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-sm text-gray-500">
+                한 달 내 등록된 면접 일정이 없습니다.
+              </div>
+            )}
           </div>
 
           {/* 연속학습/총 학습 시간 */}
@@ -375,9 +539,9 @@ export default function MyPage() {
               {/* <p className="text-sm text-[#27386d] font-medium">
                 프로그램 기준 현재 {programDay}일차
               </p> */}
-              {interviewDate && (
+              {schedulesWithinMonth.length > 0 && (
                 <p className="text-sm text-[#27386d] font-medium">
-                  면접예정: {interviewDate.getMonth() + 1}월 {interviewDate.getDate()}일
+                  한 달 내 면접예정: {schedulesWithinMonth.length}건
                 </p>
               )}
             </div>

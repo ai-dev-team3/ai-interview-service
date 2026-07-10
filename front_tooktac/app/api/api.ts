@@ -62,6 +62,25 @@ export const getResumeStatus = async (): Promise<{ has_resume: boolean }> => {
   return response.data;
 };
 
+export type InterviewSchedule = {
+  id: number;
+  scheduled_at: string;
+  description: string | null;
+};
+
+export const getInterviewSchedules = async (): Promise<InterviewSchedule[]> => {
+  const response = await api.get('/interview-schedules');
+  return response.data.data;
+};
+
+export const createInterviewSchedule = async (payload: {
+  scheduled_at: string;
+  description?: string;
+}): Promise<InterviewSchedule> => {
+  const response = await api.post('/interview-schedules', payload);
+  return response.data.data;
+};
+
 // 진행 중인 면접 세션 ID 저장/조회 (탭·재시작 간 혼선 방지용으로 백엔드에 명시 전달)
 const SESSION_KEY = 'interview_session_id';
 
