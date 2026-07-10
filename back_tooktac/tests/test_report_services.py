@@ -26,17 +26,18 @@ def _qa(n, score=80):
 
 
 class TestScoreAggregator:
-    def test_aggregate_all_scores(self):
-        result = ScoreAggregator().aggregate_all_scores([_qa(i) for i in range(1, 7)])
+    @pytest.mark.parametrize("total", [1, 3, 6, 7])
+    def test_aggregate_all_scores(self, total):
+        result = ScoreAggregator().aggregate_all_scores([_qa(i) for i in range(1, total + 1)])
 
         assert result["area_scores"]["text"]["total"] == 80
         assert result["area_scores"]["voice"]["total"] == 70
         assert result["area_scores"]["video"]["total"] == 90
-        # (80+70+90)/3 = 80
+        # (80+70+90)/3 = 80 — 질문 수와 무관하다
         assert result["total_evaluation"]["total_score"] == 80
         assert result["total_evaluation"]["grade"] == "B+"
         assert result["total_evaluation"]["rank"] == "상위 25%"
-        assert len(result["question_scores"]) == 6
+        assert len(result["question_scores"]) == total
 
     @pytest.mark.parametrize("score,grade", [
         (95, "S"), (90, "A+"), (85, "A"), (80, "B+"), (75, "B"), (70, "C+"), (69, "C"),
@@ -65,6 +66,25 @@ class TestDataParser:
         assert parsed["user_info"].user_nickname == "닉"
         assert len(parsed["question_analyses"]) == 6
         assert parsed["question_analyses"][0].final_score == 80
+
+    def _list_payload(self, n):
+        rows = [self._question_dict(i) for i in range(1, n + 1)]
+        rows[0]["user_info"] = {"user_id": "u1", "user_nickname": "닉", "interview_id": "i1",
+                                "interview_date": "2026-07-02", "interview_duration": 20}
+        return rows
+
+    @pytest.mark.parametrize("total", [1, 3, 7])
+    def test_parse_list_format_accepts_variable_count(self, total):
+        parsed = DataParser().parse_interview_data(self._list_payload(total))
+        assert len(parsed["question_analyses"]) == total
+
+    def test_parse_list_format_rejects_empty(self):
+        with pytest.raises(ValueError):
+            DataParser().parse_interview_data([])
+
+    def test_parse_list_format_rejects_over_max(self):
+        with pytest.raises(ValueError, match="1~7개"):
+            DataParser().parse_interview_data(self._list_payload(8))
 
     def test_parse_invalid_json_string(self):
         with pytest.raises(ValueError):

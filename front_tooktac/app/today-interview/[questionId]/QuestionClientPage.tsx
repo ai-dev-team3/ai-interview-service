@@ -6,15 +6,8 @@ import Link from 'next/link';
 import { useSttSocket } from '@/hooks/useSttSocket';
 import { useExpressionSocket } from '@/hooks/useExpressionSocket';
 import { useSearchParams } from 'next/navigation';
-
-const questionMap: Record<string, string> = {
-  '1': '자기소개를 해주세요.',
-  '2': '장점과 단점은 무엇인가요?',
-  '3': '가장 기억에 남는 경험은?',
-  '4': '협업 경험에 대해 말해주세요.',
-  '5': '갈등 상황을 어떻게 해결했나요?',
-  '6': '지원 동기와 포부를 말해주세요.'
-};
+import { useInterviewQuestions } from '@/hooks/useInterviewQuestions';
+import { buildSteps } from '@/lib/steps';
 
 type Props = {
   questionId: string;
@@ -23,8 +16,14 @@ type Props = {
 export default function QuestionClientPage({ questionId }: Props) {
   const searchParams = useSearchParams();
   const questionFromParam = searchParams.get('question');
+
+  const { questions } = useInterviewQuestions();
+  const currentOrder = Number(questionId);
+  const total = questions?.length ?? 0;
   const question =
-    questionFromParam || questionMap[questionId] || '선택한 질문이 없습니다';
+    questionFromParam ||
+    questions?.find((q) => q.question_order === currentOrder)?.question_text ||
+    '선택한 질문이 없습니다';
 
   const [prepareTime, setPrepareTime] = useState(30);
   const [answerTime, setAnswerTime] = useState(90);
@@ -36,17 +35,8 @@ export default function QuestionClientPage({ questionId }: Props) {
   const [isPostureActive, setPostureActive] = useState(false);
   const [isHandActive, setHandActive] = useState(false);
 
-  const steps = [
-    '아이스브레이킹',
-    '질문 1',
-    '질문 2',
-    '질문 3',
-    '질문 4',
-    '질문 5',
-    '질문 6',
-    '최종 평가'
-  ];
-  const currentStep = Number(questionId);
+  const steps = buildSteps(total);
+  const currentStep = currentOrder;
 
   useSttSocket({
     isAnswerActive,
@@ -135,7 +125,7 @@ export default function QuestionClientPage({ questionId }: Props) {
       .padStart(2, '0')}`;
   };
 
-  if (isAnalyzing) return <QuestionClientLoadingPage questionId={questionId} />;
+  if (isAnalyzing) return <QuestionClientLoadingPage questionId={questionId} totalQuestions={total} />;
 
   return (
     <div className="min-h-screen bg-[#e7f8ff]">

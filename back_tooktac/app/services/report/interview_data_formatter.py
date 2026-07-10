@@ -69,7 +69,7 @@ def _pick_representative_for_order(
 
 def generate_interview_json_from_session(db: Session, session_id: int) -> dict:
     """
-    주어진 세션 ID에 대해 6개의 질문 평가 결과를 FinalEvaluationGenerator에서 사용할 JSON 형식으로 반환
+    주어진 세션 ID의 질문별 평가 결과를 FinalEvaluationGenerator에서 사용할 JSON 형식으로 반환
     """
     session = db.query(InterviewSession).filter_by(id=session_id).first()
     if not session:
@@ -97,9 +97,6 @@ def generate_interview_json_from_session(db: Session, session_id: int) -> dict:
     for order in sorted(by_order.keys()):
         reps = _pick_representative_for_order(db, by_order[order])
         unique_questions.append(reps)
-
-    # if len(questions) != 6:
-    #     raise ValueError("해당 세션에는 질문이 6개가 존재해야 합니다")
 
     question_analyses = []
 

@@ -88,6 +88,37 @@ export const getResumeStatus = async (): Promise<{ has_resume: boolean }> => {
   return response.data;
 };
 
+// ---------- 이력서 질문 풀 ----------
+
+export type ResumeQuestion = {
+  id: number;
+  question_text: string;
+  question_type: string;
+  is_default: boolean;
+  sort_order: number;
+};
+
+export const getResumeQuestions = async (): Promise<{ resume_id: number; questions: ResumeQuestion[] }> => {
+  const response = await api.get('/resume/questions');
+  return response.data;
+};
+
+export const addResumeQuestion = async (questionText: string): Promise<ResumeQuestion> => {
+  const response = await api.post('/resume/questions', { question_text: questionText });
+  return response.data;
+};
+
+export const updateResumeQuestion = async (id: number, questionText: string): Promise<ResumeQuestion> => {
+  const response = await api.patch(`/resume/questions/${id}`, { question_text: questionText });
+  return response.data;
+};
+
+export const deleteResumeQuestion = async (id: number): Promise<void> => {
+  await api.delete(`/resume/questions/${id}`);
+};
+
+// ---------- 면접 일정 ----------
+
 export type InterviewSchedule = {
   id: number;
   scheduled_at: string;
@@ -107,8 +138,17 @@ export const createInterviewSchedule = async (payload: {
   return response.data.data;
 };
 
+// ---------- 면접 세션 ----------
+
 // 진행 중인 면접 세션 ID 저장/조회 (탭·재시작 간 혼선 방지용으로 백엔드에 명시 전달)
 const SESSION_KEY = 'interview_session_id';
+const QUESTIONS_KEY = 'interview_questions';
+
+export type InterviewQuestion = {
+  question_order: number;
+  question_text: string;
+  question_type: string;
+};
 
 export const getInterviewSessionId = (): number | null => {
   if (typeof window === 'undefined') return null;
@@ -121,19 +161,36 @@ const sessionParams = () => {
   return sid ? { session_id: sid } : {};
 };
 
-export const startInterview = async () => {
-  const response = await api.post("/start-interview");
-  if (typeof window !== 'undefined' && response.data?.session_id) {
-    sessionStorage.setItem(SESSION_KEY, String(response.data.session_id));
+/** 새로고침으로 잃지 않도록 세션 질문 목록을 sessionStorage에 둔다. */
+export const getStoredQuestions = (): InterviewQuestion[] | null => {
+  if (typeof window === 'undefined') return null;
+  const raw = sessionStorage.getItem(QUESTIONS_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as InterviewQuestion[];
+  } catch {
+    return null;
   }
-  return response.data;
 };
 
-export const generateNextQuestion = async (questionOrder: number) => {
-  const response = await api.post(`/generate-question/${questionOrder}`, null, {
-    params: sessionParams(),
-  });
-  return response.data; // { session_id, question }
+const storeSession = (data: { session_id: number; questions: InterviewQuestion[] }) => {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(SESSION_KEY, String(data.session_id));
+  sessionStorage.setItem(QUESTIONS_KEY, JSON.stringify(data.questions));
+};
+
+/** 선택한 질문 id를 순서대로 보낸다. 자기소개는 서버가 1번에 넣는다. */
+export const startInterview = async (questionIds: number[]) => {
+  const response = await api.post('/start-interview', { question_ids: questionIds });
+  storeSession(response.data);
+  return response.data; // { session_id, total_questions, questions }
+};
+
+/** sessionStorage를 잃었을 때(하드 리로드 등) 서버에서 되찾는다. */
+export const getSessionQuestions = async () => {
+  const response = await api.get('/interview/questions', { params: sessionParams() });
+  storeSession(response.data);
+  return response.data;
 };
 
 // export const fetchEvaluationResult = async (questionId: string) => {
@@ -146,9 +203,12 @@ export const fetchEvaluationResult = async () => {
   return response.data; // { question, user_answer, final_score, ... }
 };
 
-// 질문별 분석결과 api
-export const fetchFullLatestResult = async () => {
-  const response = await api.get("/result/full/latest", { params: sessionParams() });
+// 질문별 분석결과 api — 어떤 질문의 결과인지 반드시 지정한다.
+// 세션의 질문이 모두 미리 만들어지므로 "가장 마지막 질문"을 보면 안 된다.
+export const fetchFullResult = async (questionOrder: number) => {
+  const response = await api.get("/result/full", {
+    params: { ...sessionParams(), question_order: questionOrder },
+  });
   return response.data;
 };
 
