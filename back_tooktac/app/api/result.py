@@ -16,27 +16,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["result"])
 
 
-@router.get("/result/full/latest", response_model=FullResultResponse)
-def get_full_latest_result(
+@router.get("/result/full", response_model=FullResultResponse)
+def get_full_result(
+    question_order: int = Query(..., ge=1, description="조회할 질문 순번 (1부터)"),
     session_id: int | None = Query(None, description="명시하면 해당 세션 기준, 없으면 최신 세션"),
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user)
 ):
-    logger.debug("/result/full/latest user_id=%s session_id=%s", user_id, session_id)
+    """특정 질문 하나의 분석 결과.
+
+    세션의 모든 질문은 면접 시작 시점에 한꺼번에 만들어진다. 따라서 "가장 마지막
+    질문"이 아니라 방금 답한 질문을 명시해야 한다. 그러지 않으면 1번을 답해도
+    마지막 질문의 결과(=아직 없음)를 보게 되어 프론트가 영원히 폴링한다.
+    """
+    logger.debug("/result/full user_id=%s session_id=%s order=%s",
+                 user_id, session_id, question_order)
     # 1. 세션 결정 (명시 session_id 우선, 소유권 검증 포함)
     latest_session = resolve_session(db, user_id, session_id)
     if not latest_session:
         raise HTTPException(status_code=404, detail="latest_session 없음")
 
-    # 2. 가장 마지막 질문 가져오기
+    # 2. 요청된 순번의 질문 (같은 order가 여럿이면 최신 것)
     latest_question = (
         db.query(InterviewQuestion)
-        .filter_by(session_id=latest_session.id)
-        .order_by(InterviewQuestion.question_order.desc())
+        .filter_by(session_id=latest_session.id, question_order=question_order)
+        .order_by(InterviewQuestion.id.desc())
         .first()
     )
     if not latest_question:
-        raise HTTPException(status_code=404, detail="latest_question 질문 없음")
+        raise HTTPException(status_code=404, detail=f"{question_order}번 질문 없음")
 
     # 3. 해당 질문의 답변 (아직 없을 수 있음 — 스키마 기본값으로 방어)
     latest_answer = (

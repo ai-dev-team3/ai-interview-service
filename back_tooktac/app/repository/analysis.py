@@ -20,7 +20,7 @@ class EvaluationResult(Base):
     # 외래 키: 질문 ID (InterviewQuestion 테이블 참조)
     question_id = Column(Integer, ForeignKey("interview_question.id"), nullable=False)
 
-    # ✅ 새로 추가한 컬럼: 질문 순서값 (1~6)
+    # ✅ 새로 추가한 컬럼: 질문 순서값 (1부터)
     question_order = Column(Integer, nullable=False)
 
     # 텍스트 평가 점수 (의도, 지식, 유사도)
@@ -63,7 +63,7 @@ class VideoEvaluationResult(Base):
     session_id = Column(Integer, ForeignKey("interview_session.id"), nullable=False)
     question_id = Column(Integer, ForeignKey("interview_question.id"), nullable=False)
 
-    question_order = Column(Integer, nullable=False)  # ✅ 질문 순서 (1~6)
+    question_order = Column(Integer, nullable=False)  # ✅ 질문 순서 (1부터)
 
     gaze_score = Column(Integer)
     shoulder_warning = Column(Integer)

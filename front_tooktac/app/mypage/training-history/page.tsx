@@ -38,7 +38,7 @@ ChartJS.register(
 
 // 키 타입 정의
 type AreaKey = 'text' | 'voice' | 'video';
-type QuestionKey = 'concept' | 'technical' | 'situation' | 'behavior' | 'followUp';
+type QuestionKey = 'concept' | 'technical' | 'situation' | 'behavior';
 
 type DayCounters = {
   programDayToday: number;
@@ -512,77 +512,6 @@ export default function TrainingHistory() {
     return { lineData: data, lineOptions: options };
   }, [weeklyData, TARGET_SCORE, emptyLineData, emptyLineOptions, peerAverages]);
 
-  // // 레이더 차트 (질문유형별)
-  // const { questionData, questionOptions }: { questionData: ChartData<'radar'>; questionOptions: ChartOptions<'radar'> } =
-  //   useMemo(() => {
-  //     if (weeklyData.length === 0) {
-  //       return { questionData: emptyRadarData, questionOptions: emptyRadarOptions };
-  //     }
-
-  //     const day1 = weeklyData[0];
-  //     const day7 = weeklyData[weeklyData.length - 1];
-
-  //     const data: ChartData<'radar'> = {
-  //       labels: ['개념설명', '기술형', '상황형', '행동형', '꼬리질문'],
-  //       datasets: [
-  //         {
-  //           label: '1일차',
-  //           data: [
-  //             day1.questionTypes.concept,
-  //             day1.questionTypes.technical,
-  //             day1.questionTypes.situation,
-  //             day1.questionTypes.behavior,
-  //             day1.questionTypes.followUp
-  //           ],
-  //           borderColor: '#1e3a8a',
-  //           backgroundColor: '#1e3a8a25',
-  //           borderWidth: 3,
-  //           pointBackgroundColor: '#1e3a8a',
-  //           pointBorderColor: CHART_COLORS.white,
-  //           pointBorderWidth: 3
-  //         },
-  //         {
-  //           label: '7일차',
-  //           data: [
-  //             day7.questionTypes.concept,
-  //             day7.questionTypes.technical,
-  //             day7.questionTypes.situation,
-  //             day7.questionTypes.behavior,
-  //             day7.questionTypes.followUp
-  //           ],
-  //           borderColor: '#6ce5e8',
-  //           backgroundColor: '#6ce5e830',
-  //           borderWidth: 3,
-  //           pointBackgroundColor: '#6ce5e8',
-  //           pointBorderColor: CHART_COLORS.white,
-  //           pointBorderWidth: 3
-  //         }
-  //       ]
-  //     };
-
-  //     const options: ChartOptions<'radar'> = {
-  //       responsive: true,
-  //       maintainAspectRatio: false,
-  //       plugins: {
-  //         legend: {
-  //           position: 'bottom',
-  //           labels: { boxWidth: 12, padding: 15, font: { size: 11 } }
-  //         }
-  //       },
-  //       scales: {
-  //         r: {
-  //           angleLines: { color: '#e2e8f0' },
-  //           grid: { color: '#e2e8f0' },
-  //           pointLabels: { color: '#374151', font: { size: 11 } },
-  //           ticks: { display: false },
-  //           min: 50,
-  //           max: 100
-  //         }
-  //       }
-  //     };
-
-  //     return { questionData: data, questionOptions: options };
-  //   }, [weeklyData, emptyRadarData, emptyRadarOptions]);
   // 레이더 차트 (영역별)
   const { areasData, areasOptions }: { areasData: ChartData<'radar'>; areasOptions: ChartOptions<'radar'> } = useMemo(() => {
     if (weeklyData.length === 0) {
@@ -683,8 +612,7 @@ export default function TrainingHistory() {
             first.questionTypes.concept,
             first.questionTypes.technical,
             first.questionTypes.situation,
-            first.questionTypes.behavior,
-            first.questionTypes.followUp
+            first.questionTypes.behavior
           ],
           borderColor: '#1e3a8a',
           backgroundColor: '#1e3a8a25',
@@ -702,8 +630,7 @@ export default function TrainingHistory() {
             last.questionTypes.concept,
             last.questionTypes.technical,
             last.questionTypes.situation,
-            last.questionTypes.behavior,
-            last.questionTypes.followUp
+            last.questionTypes.behavior
           ],
           borderColor: '#6ce5e8',
           backgroundColor: '#6ce5e830',
@@ -715,7 +642,7 @@ export default function TrainingHistory() {
       }
 
     const data: ChartData<'radar'> = {
-      labels: ['개념설명', '기술형', '상황형', '행동형', '꼬리질문'],
+      labels: ['개념설명', '기술형', '상황형', '행동형'],
       datasets
     };
 
@@ -807,8 +734,8 @@ export default function TrainingHistory() {
   const getWeakestQuestionType = () => {
     if (weeklyData.length === 0) return '데이터 로딩 중';
     const latestData = weeklyData[weeklyData.length - 1];
-    const types: QuestionKey[] = ['concept', 'technical', 'situation', 'behavior', 'followUp'];
-    const typeNames = ['개념설명형', '기술형', '상황형', '행동형', '꼬리질문'];
+    const types: QuestionKey[] = ['concept', 'technical', 'situation', 'behavior'];
+    const typeNames = ['개념설명형', '기술형', '상황형', '행동형'];
 
     const minType = types.reduce<QuestionKey>(
       (min, type) => (latestData.questionTypes[type] < latestData.questionTypes[min] ? type : min),

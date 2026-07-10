@@ -82,7 +82,7 @@ export default function TodayInterviewPage() {
                     <i className="ri-question-line text-lg text-[#27386d]"></i>
                   </div>
                   <div className="text-sm font-medium text-[#27386d] mb-1">3단계</div>
-                  <div className="text-xs text-gray-600">면접 질문 (6개)</div>
+                  <div className="text-xs text-gray-600">면접 질문 (최대 7개)</div>
                 </div>
                 <div className="text-center">
                   <div className="w-12 h-12 bg-[#27386d] rounded-full flex items-center justify-center mx-auto mb-3">

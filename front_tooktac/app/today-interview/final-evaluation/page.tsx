@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useUser } from "@/contexts/UserContext";
 import { fetchFinalReport } from '@/api/api';
+import { buildSteps } from '@/lib/steps';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip
@@ -67,7 +68,7 @@ export default function FinalEvaluationPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<FinalReportResponse['evaluationData']['questionScores'][0] | null>(null);
 
-  const steps = ['아이스브레이킹', '질문 1', '질문 2', '질문 3', '질문 4', '질문 5', '질문 6', '최종 평가'];
+  const steps = buildSteps(report?.evaluationData.questionScores.length ?? 0);
   const currentStep = steps.length - 1;
 
   useEffect(() => {

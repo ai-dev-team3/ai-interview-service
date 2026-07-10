@@ -2,6 +2,8 @@
 import json
 from typing import Dict, List, Union
 
+from app.services.interview.plan import MAX_INTERVIEW_QUESTIONS
+
 from .models import UserInfo, QuestionAnalysis
 
 
@@ -65,8 +67,10 @@ class DataParser:
         ]
         """
 
-        if not questions_list or len(questions_list) != 6:
-            raise ValueError(f"질문 데이터는 정확히 6개여야 합니다. 현재: {len(questions_list)}개")
+        if not questions_list or len(questions_list) > MAX_INTERVIEW_QUESTIONS:
+            raise ValueError(
+                f"질문 데이터는 1~{MAX_INTERVIEW_QUESTIONS}개여야 합니다. 현재: {len(questions_list)}개"
+            )
 
         # 사용자 정보 추출 (첫 번째 질문에서 또는 별도로 제공)
         user_info = self._extract_user_info(questions_list)
@@ -123,8 +127,6 @@ class DataParser:
 
         # 질문 데이터 변환
         questions_list = data_dict[questions_key]
-        # if len(questions_list) != 6:
-        #     raise ValueError(f"질문 데이터는 정확히 6개여야 합니다. 현재: {len(questions_list)}개")
 
         question_analyses = []
         for i, question_data in enumerate(questions_list):

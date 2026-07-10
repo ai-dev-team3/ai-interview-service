@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import QuestionClientLoadingPage from "@/today-interview/[questionId]/QuestionClientLoadingPage";
-import Page from "@/today-interview/make-question/page";
 import { useExpressionSocket } from "@/hooks/useExpressionSocket";
 
 function AnswerPageContent() {
@@ -97,7 +96,7 @@ function AnswerPageContent() {
   const handleSubmitAnswer = () => {
     setIsAnswerActive(false);
     setAnswerTime(0);
-    router.push(`/today-interview/make-question?next=/today-interview/1`);
+    router.push('/today-interview/compose');
   };
 
   return (

@@ -27,8 +27,8 @@ def test_normalize_qtype():
     assert normalize_question_type("기술형") == "technical"
     assert normalize_question_type("상황형") == "situation"
     assert normalize_question_type("행동형") == "behavior"
-    assert normalize_question_type("꼬리질문") == "followUp"
     assert normalize_question_type("") == "concept"  # 기본값
+    assert normalize_question_type("알 수 없는 유형") == "concept"  # 폴백
 
 
 def test_avg_or_zero():

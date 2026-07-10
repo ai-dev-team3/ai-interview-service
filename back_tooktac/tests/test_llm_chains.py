@@ -8,7 +8,6 @@ from langchain_core.language_models import FakeListChatModel
 from app.services.resume.structurer import ResumeStructurer, ResumeStructuringError
 from app.services.text.answer_generator import ModelAnswerGenerator
 from app.services.text.evaluator import AnswerEvaluator
-from app.services.text.make_question import InterviewQuestionGenerator
 
 STRUCTURED = {
     "skills": ["Python", "FastAPI"],
@@ -19,45 +18,6 @@ STRUCTURED = {
                           "key_experiences": "경험", "career_goals": "목표"},
     "desired_position": {"job_type": "백엔드"},
 }
-
-
-# ---------- InterviewQuestionGenerator ----------
-
-def test_question_generator_conceptual():
-    fake = FakeListChatModel(responses=["Python의 GIL에 대해 설명해주세요."])
-    generator = InterviewQuestionGenerator(llm=fake)
-
-    result = generator.generate_conceptual_question({"structured_content": STRUCTURED})
-
-    assert result == {
-        "question": "Python의 GIL에 대해 설명해주세요.",
-        "question_type": "개념설명형",
-    }
-
-
-def test_question_generator_followup_uses_previous_answers():
-    fake = FakeListChatModel(responses=["방금 말씀하신 내용을 더 설명해주세요."])
-    generator = InterviewQuestionGenerator(llm=fake)
-
-    result = generator.generate_followup_resume_question(
-        {"structured_content": STRUCTURED}, "Q1", "A1", "Q2", "A2"
-    )
-
-    assert result["question"] == "방금 말씀하신 내용을 더 설명해주세요."
-    assert result["question_type"] == "개념설명형"
-
-
-def test_question_generator_all_types():
-    fake = FakeListChatModel(responses=["질문입니다."])
-    generator = InterviewQuestionGenerator(llm=fake)
-    parsed = {"structured_content": STRUCTURED}
-
-    assert generator.generate_technical_question(parsed)["question_type"] == "기술형"
-    assert generator.generate_situational_question(parsed)["question_type"] == "상황형"
-    assert generator.generate_behavioral_question(parsed)["question_type"] == "행동형"
-    assert generator.generate_followup_coverletter_question(
-        parsed, "Q4", "A4", "Q5", "A5"
-    )["question_type"] == "상황형"
 
 
 # ---------- ResumeStructurer ----------

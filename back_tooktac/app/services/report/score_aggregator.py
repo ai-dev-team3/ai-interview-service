@@ -13,7 +13,7 @@ class ScoreAggregator:
         모든 점수를 집계해서 최종 평가 점수 계산
 
         Args:
-            question_analyses: 6개 질문의 분석 결과 (이미 가중치 적용된 점수 포함)
+            question_analyses: 질문별 분석 결과 (이미 가중치 적용된 점수 포함)
 
         Returns:
             집계된 점수 딕셔너리
