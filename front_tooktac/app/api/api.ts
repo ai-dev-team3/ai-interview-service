@@ -47,6 +47,32 @@ export const checkAuth = async () => {
   return response.data;
 };
 
+export type AccountInfo = {
+  user_id: number;
+  username: string;
+  nickname: string;
+  email: string | null;
+  desired_job: string;
+};
+
+export const getAccount = async (): Promise<AccountInfo> => {
+  const response = await api.get('/account');
+  return response.data;
+};
+
+export const changePassword = async (payload: {
+  current_password: string;
+  new_password: string;
+}) => {
+  const response = await api.patch('/account/password', payload);
+  return response.data;
+};
+
+export const deleteAccount = async () => {
+  const response = await api.delete('/account');
+  return response.data;
+};
+
 // 이력서 등록/갱신 (클라이언트에서 추출한 텍스트 전송)
 export const uploadResume = async (resumeText: string, filename?: string) => {
   const form = new FormData();

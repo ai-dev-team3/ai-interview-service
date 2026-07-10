@@ -419,6 +419,25 @@ export default function MyPage() {
             )}
           </div>
 
+          {/* 계정 관리 */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[#27386d]">계정 관리</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  아이디 확인, 비밀번호 변경, 회원 탈퇴를 관리합니다.
+                </p>
+              </div>
+              <Link
+                href="/mypage/account"
+                className="inline-flex items-center px-4 py-2 rounded-full bg-[#27386d] text-white text-sm font-medium hover:bg-opacity-90 transition-colors whitespace-nowrap"
+              >
+                <i className="ri-settings-3-line mr-2" />
+                계정 관리
+              </Link>
+            </div>
+          </div>
+
           {/* 연속학습/총 학습 시간 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
