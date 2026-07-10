@@ -95,7 +95,10 @@ export default function QuestionClientPage({ questionId }: Props) {
       interval = setInterval(() => {
         setAnswerTime((prev) => {
           if (prev <= 1) {
+            // 시간이 다 되면 제출 버튼을 누른 것과 똑같이 처리한다.
+            // 예전에는 여기서 녹음만 멈추고 화면이 그대로 남아 있었다.
             setIsAnswerActive(false);
+            setIsAnalyzing(true);
             return 0;
           }
           return prev - 1;
