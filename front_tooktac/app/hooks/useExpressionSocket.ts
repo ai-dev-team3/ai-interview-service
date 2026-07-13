@@ -45,8 +45,8 @@ export function useExpressionSocket({
         let cancelled = false;
         let interval: ReturnType<typeof setInterval> | null = null;
         let landmarkers: Landmarkers | null = null;
-
-        let useClient = getPostureMode() === "client";
+        let loading = false;
+        let failed = false; // 클라이언트 경로가 한 번 죽으면 이 질문 동안 다시 시도하지 않는다
 
         const canvas = createMirrorCanvas(); // 640x480 — 서버의 카메라 행렬과 맞춘다
         const sessionId = getInterviewSessionId();
@@ -56,10 +56,22 @@ export function useExpressionSocket({
 
         const fallbackToServer = (reason: string) => {
             console.warn(`[posture] 서버 경로로 전환: ${reason}`);
-            useClient = false;
+            failed = true;
             // 랜드마커는 닫지 않는다. 탭 수명 동안 공유되는 캐시라, 여기서 닫으면
             // 다른 질문에서 다시 수 초를 들여 만들어야 한다.
             landmarkers = null;
+        };
+
+        const ensureLandmarkers = () => {
+            if (loading || landmarkers || failed) return;
+            loading = true;
+            getLandmarkers()
+                .then((created) => {
+                    if (cancelled) return; // 캐시된 인스턴스이므로 닫지 않는다
+                    landmarkers = created;
+                    console.info(`[posture] 클라이언트 추론 시작 (delegate=${created.delegate})`);
+                })
+                .catch((e) => fallbackToServer(`랜드마커 초기화 실패: ${e}`));
         };
 
         const sendLandmarks = () => {
@@ -81,6 +93,13 @@ export function useExpressionSocket({
 
         const tick = () => {
             if (video.readyState < 2 || socket.readyState !== WebSocket.OPEN) return;
+
+            // 모드는 아이스브레이킹 벤치마크(약 7초)가 끝나야 정해진다. 준비 시간을 기다리지 않고
+            // 답변을 시작하면 소켓이 열릴 때는 아직 미정이다. 그래서 매 프레임 다시 읽는다.
+            // 한 번만 읽으면 그 답변 내내 서버 경로에 갇힌다.
+            const useClient = !failed && getPostureMode() === "client";
+            if (useClient) ensureLandmarkers();
+
             try {
                 // 클라이언트 모드라도 랜드마커가 아직 없으면 JPEG를 보낸다.
                 // 모델 로딩(수 초) 동안 프레임을 버리면 그만큼 분석이 유실된다.
@@ -119,16 +138,6 @@ export function useExpressionSocket({
                 console.warn("WebSocket 종료:", event.code, event.reason);
             }
         };
-
-        if (useClient) {
-            getLandmarkers()
-                .then((created) => {
-                    if (cancelled) return; // 캐시된 인스턴스이므로 닫지 않는다
-                    landmarkers = created;
-                    console.info(`[posture] 클라이언트 추론 시작 (delegate=${created.delegate})`);
-                })
-                .catch((e) => fallbackToServer(`랜드마커 초기화 실패: ${e}`));
-        }
 
         return () => {
             cancelled = true;
