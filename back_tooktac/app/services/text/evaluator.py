@@ -138,6 +138,18 @@ class AnswerEvaluator:
             chain = self._situational_chain
 
         result = chain.invoke({"question": question, "user_answer": user_answer})
+        return self._clamp(result)
+
+    async def aevaluate(self, question: str, user_answer: str, evaluation_type: str) -> dict:
+        """비동기 변형. LLM 호출은 네트워크 대기라 스레드를 잡고 있을 이유가 없다."""
+        chain = (
+            self._technical_chain if evaluation_type == "technical" else self._situational_chain
+        )
+        result = await chain.ainvoke({"question": question, "user_answer": user_answer})
+        return self._clamp(result)
+
+    @staticmethod
+    def _clamp(result: dict) -> dict:
         result["intent_score"] = max(1.0, min(10.0, float(result.get("intent_score", 1.0))))
         result["knowledge_score"] = max(1.0, min(10.0, float(result.get("knowledge_score", 1.0))))
         return result

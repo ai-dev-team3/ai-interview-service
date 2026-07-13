@@ -11,6 +11,17 @@ import json
 
 logger = logging.getLogger(__name__)
 
+def _score(result, attr: str) -> float:
+    """결과 행이 없을 수 있다 — 실전 면접은 분석이 백그라운드에서 돌기 때문이다.
+
+    서버가 재시작하거나 분석이 유실되면 그 문항의 행이 영영 생기지 않는다.
+    그래도 나머지 문항으로 리포트는 나와야 한다. 여기서 죽으면 면접 전체가 날아간다.
+    """
+    if result is None:
+        return 0
+    return getattr(result, attr, 0) or 0
+
+
 def calculate_final_score(text_result: EvaluationResult, video_result: VideoEvaluationResult, question_type: str) -> int:
     """
     질문 유형에 따라 text/voice/video 점수를 가중 평균으로 계산
@@ -18,9 +29,9 @@ def calculate_final_score(text_result: EvaluationResult, video_result: VideoEval
     return QuestionTypeWeights.calculate_weighted_score({
         "type": question_type,
         "detailAnalysis": {
-            "text": {"score": text_result.final_text_score or 0},
-            "voice": {"score": text_result.final_speech_score or 0},
-            "video": {"score": video_result.final_video_score or 0}
+            "text": {"score": _score(text_result, "final_text_score")},
+            "voice": {"score": _score(text_result, "final_speech_score")},
+            "video": {"score": _score(video_result, "final_video_score")},
         }
     })
 
@@ -114,43 +125,56 @@ def generate_interview_json_from_session(db: Session, session_id: int) -> dict:
         logger.debug("TextResult dict: %s", json.dumps(truncate_values(sa_to_dict(text_result)), ensure_ascii=False, default=str))
         logger.debug("VideoResult dict: %s", json.dumps(truncate_values(sa_to_dict(video_result)), ensure_ascii=False, default=str))
 
-        # if not all([answer, text_result, video_result]):
-        #     raise ValueError(f"{order}번 질문의 분석 데이터가 부족합니다")
+        # 분석 데이터가 없어도 죽지 않는다. 실전 면접은 분석이 백그라운드에서 돌기 때문에
+        # 서버가 재시작하거나 분석이 유실되면 그 문항만 비어 있을 수 있다. 그 한 문항 때문에
+        # 면접 전체의 리포트를 못 보게 되는 게 훨씬 나쁘다. 대신 실패했다고 표시한다.
+        analysis_failed = text_result is None
+        if analysis_failed:
+            logger.warning("%s번 질문의 분석 결과가 없다 — 0점으로 리포트에 담는다", order)
 
         question_data = {
             "question_id": str(question_id),
             "question_number": order,
             "question_type": q.question_type,
+            "analysis_failed": analysis_failed,
             "final_score": calculate_final_score(text_result, video_result, q.question_type),
             "question_text": q.question_text,
-            "user_answer": answer.answer_text,
-            "model_answer": text_result.model_answer,
+            "user_answer": answer.answer_text if answer else "",
+            "model_answer": text_result.model_answer if text_result else "",
             "detail_analysis": {
                 "text": {
-                    "score": text_result.final_text_score,
-                    "similarity": text_result.similarity,
-                    "accuracy": text_result.knowledge_score,
-                    "understanding": text_result.intent_score
+                    "score": _score(text_result, "final_text_score"),
+                    "similarity": _score(text_result, "similarity"),
+                    "accuracy": _score(text_result, "knowledge_score"),
+                    "understanding": _score(text_result, "intent_score")
                 },
                 "voice": {
-                    "score": text_result.final_speech_score,
-                    "speed": {"score": round(text_result.speed_score * 2.5)},
-                    "fluency": {"score": round(text_result.filler_score * 2.5)},
-                    "tone": {"score": round(text_result.pitch_score * 5.0)},
-                    "speed_label": text_result.speed_label,
-                    "fluency_label": text_result.fluency_label,
-                    "tone_label": text_result.tone_label
+                    "score": _score(text_result, "final_speech_score"),
+                    "speed": {"score": round(_score(text_result, "speed_score") * 2.5)},
+                    "fluency": {"score": round(_score(text_result, "filler_score") * 2.5)},
+                    "tone": {"score": round(_score(text_result, "pitch_score") * 5.0)},
+                    "speed_label": text_result.speed_label if text_result else "없음",
+                    "fluency_label": text_result.fluency_label if text_result else "없음",
+                    "tone_label": text_result.tone_label if text_result else "없음"
                 },
                 "video": {
-                    "score": video_result.final_video_score,
-                    "gaze_rate": {"percentage": video_result.gaze_score},
-                    "shoulder_posture": {"score": 100 - video_result.shoulder_warning * 10},
-                    "hand_posture": {"score": 100 - video_result.hand_warning * 10}
+                    "score": _score(video_result, "final_video_score"),
+                    "gaze_rate": {"percentage": _score(video_result, "gaze_score")},
+                    "shoulder_posture": {"score": 100 - _score(video_result, "shoulder_warning") * 10},
+                    "hand_posture": {"score": 100 - _score(video_result, "hand_warning") * 10}
                 }
             },
-            "feedback": text_result.final_feedback,
-            "strengths": text_result.strengths.split("\n") if text_result.strengths else [],
-            "improvements": text_result.improvements.split("\n") if text_result.improvements else []
+            "feedback": (
+                text_result.final_feedback if text_result
+                else "이 문항의 분석이 완료되지 않았습니다."
+            ),
+            "strengths": (
+                text_result.strengths.split("\n") if text_result and text_result.strengths else []
+            ),
+            "improvements": (
+                text_result.improvements.split("\n")
+                if text_result and text_result.improvements else []
+            )
         }
 
         question_analyses.append(question_data)

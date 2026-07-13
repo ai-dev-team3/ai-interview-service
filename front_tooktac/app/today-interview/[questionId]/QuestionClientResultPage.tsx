@@ -75,7 +75,7 @@ export default function QuestionClientResultPage({ result, nextLink, totalQuesti
 
             // 색상 매핑
             if (['적절', '매끄러움', '밝음'].includes(option)) return 'bg-green-500';
-            if (['무난', '단조로움'].includes(option)) return 'bg-yellow-500';
+            if (['무난', '단조로움', '과장됨'].includes(option)) return 'bg-yellow-500';
             if (['느림', '빠름', '버벅거림'].includes(option)) return 'bg-red-500';
             return 'bg-gray-300';
         };
@@ -190,10 +190,12 @@ export default function QuestionClientResultPage({ result, nextLink, totalQuesti
     const ToneWave = ({ value }: { value: string }) => {
         const getBars = (tone: string) => {
             if (tone === '단조로움') {
-                return [18, 20, 19, 21, 18, 20, 19];
-            } else {
-                return [12, 25, 15, 30, 18, 28, 22];
+                return [18, 20, 19, 21, 18, 20, 19];   // 거의 평평
             }
+            if (tone === '과장됨') {
+                return [6, 34, 8, 36, 10, 32, 12];     // 심하게 출렁임
+            }
+            return [12, 25, 15, 30, 18, 28, 22];
         };
 
         const getColor = (tone: string) => {

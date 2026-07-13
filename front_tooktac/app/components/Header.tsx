@@ -61,8 +61,7 @@ export default function Header() {
             <nav className="hidden md:flex items-center space-x-8">
               <Link href="/about" className="text-gray-700 hover:text-[#27386d] transition-colors">서비스 소개</Link>
               <button onClick={() => handleProtectedRoute('/today-interview')} className="text-gray-700 hover:text-[#27386d] transition-colors">오늘의 면접</button>
-              {/* <button onClick={() => handleProtectedRoute('/practice-interview')} className="text-gray-700 hover:text-[#27386d] transition-colors">실전면접</button> */}
-              <button className="text-gray-700 hover:text-[#27386d] transition-colors">실전면접</button>
+              <button onClick={() => handleProtectedRoute('/practice-interview')} className="text-gray-700 hover:text-[#27386d] transition-colors">실전면접</button>
               <button onClick={() => handleProtectedRoute('/mypage')} className="text-gray-700 hover:text-[#27386d] transition-colors">마이페이지</button>
 
               {!isLoggedIn ? (

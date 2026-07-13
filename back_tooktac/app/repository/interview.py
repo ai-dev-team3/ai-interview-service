@@ -12,6 +12,11 @@ class InterviewSession(Base):
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
     started_at = Column(TIMESTAMP, default=utcnow_naive)
 
+    # practice: 사용자가 질문을 고르고, 문항마다 결과를 본다
+    # real    : 서버가 질문을 정하고, 분석은 백그라운드로 돌며 끝나야 리포트를 본다
+    #           꼬리질문이 붙을 수 있어 질문 행이 진행 중에 하나씩 생긴다
+    mode = Column(String(20), nullable=False, default="practice", server_default="practice")
+
     user = relationship("User", back_populates="sessions")
 
     questions = relationship("InterviewQuestion", back_populates="session")

@@ -21,9 +21,15 @@ class FakeSTT:
     def __init__(self, stt_type):
         self.stt_type = stt_type
 
+    calls: list = []
+
     def transcribe(self, wav_path):
+        FakeSTT.calls.append(self.stt_type)
         if self.stt_type == "clova":
             return "클로바 전사 결과", {"segments": [{"text": "클로바 전사 결과", "start": 0, "end": 1000}]}
+        if self.stt_type == "sensevoice":
+            # SenseVoice는 간투어를 지우지 않는다 ("음"이 남는다)
+            return "센스보이스 음 전사 결과", {"segments": [{"text": "센스보이스 음 전사 결과", "start": 0, "end": 2000}]}
         if FakeSTT.fail_vito:
             raise RuntimeError("vito 서버 오류")
         return "비토 전사 음 결과", {}
@@ -68,12 +74,49 @@ class FailingOrchestrator:
 
 def _pipeline(orchestrator=None):
     FakeSTT.fail_vito = False
+    FakeSTT.calls = []
     return AnswerAnalysisPipeline(
         stt_factory=FakeSTT,
         analyzer_factory=FakeAnalyzer,
         feedback_factory=FakeFeedbackGenerator,
         orchestrator=orchestrator or FakeOrchestrator(),
     )
+
+
+def _real_pipeline(orchestrator=None):
+    FakeSTT.fail_vito = False
+    FakeSTT.calls = []
+    return AnswerAnalysisPipeline.for_real_interview(
+        stt_factory=FakeSTT,
+        analyzer_factory=FakeAnalyzer,
+        feedback_factory=FakeFeedbackGenerator,
+        orchestrator=orchestrator or FakeOrchestrator(),
+    )
+
+
+def test_실전은_sensevoice로_전사한다():
+    pipeline = _real_pipeline()
+
+    text, raw = asyncio.run(pipeline.transcribe("x.wav"))
+
+    assert text == "센스보이스 음 전사 결과"
+    assert FakeSTT.calls == ["sensevoice"]
+
+
+def test_실전은_vito를_부르지_않고_간투어를_STT_텍스트에서_센다():
+    """SenseVoice는 간투어를 남긴다 → Vito가 필요 없다.
+
+    외부 STT 호출이 0회가 되고, 병렬 작업도 하나 줄어 백그라운드 분석이 가벼워진다.
+    """
+    pipeline = _real_pipeline()
+
+    sf, ev = asyncio.run(pipeline.analyze_and_evaluate(
+        "x.wav", {"segments": []}, "센스보이스 음 전사 결과", "질문", "기술형"
+    ))
+
+    assert FakeSTT.calls == [], "실전인데 Vito를 불렀다"
+    assert sf["filler_count"] == 1  # STT 텍스트의 "음"을 잡았다
+    assert ev is not None
 
 
 def test_transcribe_strips_text():

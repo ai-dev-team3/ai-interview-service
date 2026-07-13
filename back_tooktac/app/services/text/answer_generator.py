@@ -94,3 +94,14 @@ class ModelAnswerGenerator:
             return self.generate_technical_answer(question)
         else:
             return self.generate_situational_answer(question, user_answer)
+
+    async def agenerate(self, question: str, user_answer: str, evaluation_type: str) -> str:
+        """비동기 변형. LLM 호출은 네트워크 대기라 스레드를 잡고 있을 이유가 없다."""
+        chain = self._technical_chain if evaluation_type == "technical" else self._situational_chain
+        payload = (
+            {"question": question}
+            if evaluation_type == "technical"
+            else {"question": question, "user_answer": user_answer}
+        )
+        result = await chain.ainvoke(payload)
+        return result.strip()

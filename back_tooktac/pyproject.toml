@@ -29,6 +29,12 @@ dependencies = [
     "sentence-transformers>=5.0.0",
     "transformers>=4.54.1",
     "torch>=2.7.1",
+    # AI - STT (실전 면접의 SenseVoice 로컬 추론)
+    # 리눅스의 PyPI torch 휠에는 CUDA가 들어 있어 배포 서버는 그대로 GPU를 쓴다.
+    # Windows 로컬에서 GPU를 쓰려면 CUDA 휠을 따로 받아야 한다 (README 참고):
+    #   uv pip install --reinstall torch torchaudio --index-url https://download.pytorch.org/whl/cu128
+    "funasr>=1.2.0",
+    "torchaudio>=2.7.1",
     # Audio
     "librosa>=0.11.0",
     "sounddevice>=0.5.2",
