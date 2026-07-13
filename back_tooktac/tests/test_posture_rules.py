@@ -136,3 +136,18 @@ def test_shoulder_tilt_thresholds():
     assert score_landmarks(None, pose_with(0.05))["shoulder_dir"] == "LEFT UP"
     assert score_landmarks(None, pose_with(-0.05))["shoulder_dir"] == "RIGHT UP"
     assert score_landmarks(None, pose_with(0.0))["shoulder_dir"] == "CENTER"
+
+
+def test_degenerate_face_does_not_raise():
+    """퇴화된 얼굴 좌표가 들어와도 예외를 던지지 않는다.
+
+    랜드마크 경로에서는 좌표가 네트워크로 들어오므로 정상 입력을 가정할 수 없다.
+    모든 점이 겹치면 cv2.solvePnP 는 False 를 돌려주는 게 아니라 cv2.error 를 던진다.
+    막지 않으면 프레임마다 스택 트레이스가 찍히고 그 질문의 자세 점수가 0이 된다.
+    """
+    face = {i: Landmark(0.5, 0.5, 0.0) for i in FACE_INDICES}
+
+    result = score_landmarks(face, None)
+
+    assert result["pitch_dir"] == "CENTER"  # 피치를 못 구하면 판정하지 않는다
+    assert result["ok_pitch"] is True       # 사용자를 처벌하지 않는다

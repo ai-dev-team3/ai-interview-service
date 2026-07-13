@@ -106,9 +106,16 @@ def score_landmarks(
         image_points = np.array(
             [[face[i].x * w, face[i].y * h] for i in PNP_FACE_INDICES], dtype=np.float32
         )
-        success, rvec, _ = cv2.solvePnP(
-            _MODEL_POINTS, image_points, camera_matrix(w, h), np.zeros((4, 1))
-        )
+        # 좌표가 퇴화(모든 점이 겹치거나 일직선)하면 solvePnP는 False를 돌려주는 게 아니라
+        # cv2.error를 던진다. 랜드마크 경로에서는 좌표가 네트워크로 들어오므로 정상 입력을
+        # 가정할 수 없다. 피치를 못 구하면 CENTER로 두고 나머지 판정은 그대로 진행한다.
+        try:
+            success, rvec, _ = cv2.solvePnP(
+                _MODEL_POINTS, image_points, camera_matrix(w, h), np.zeros((4, 1))
+            )
+        except cv2.error:
+            success = False
+
         if success:
             rmat, _ = cv2.Rodrigues(rvec)
             pitch = np.degrees(np.arcsin(-rmat[2][1]))
