@@ -122,14 +122,9 @@ export default function RealInterviewSessionPage() {
         onComplete: handleRecorded,
     });
 
-    if (!start || !question) {
-        return (
-            <div className="min-h-screen bg-[#e7f8ff] flex items-center justify-center">
-                <div className="text-[#27386d] text-xl">면접을 불러오는 중...</div>
-            </div>
-        );
-    }
-
+    // 비디오 엘리먼트는 항상 렌더한다.
+    // 로딩 중이라고 화면을 통째로 갈아끼우면 #webcam-video 가 DOM 에 없는 렌더가 생기고,
+    // useWebcamPreview 는 마운트 시점에 그 엘리먼트를 한 번만 찾으므로 웹캠이 영영 안 붙는다.
     const label =
         phase === 'prepare' ? '준비' : phase === 'answer' ? '답변 중' : '전송 중';
 
@@ -137,13 +132,18 @@ export default function RealInterviewSessionPage() {
         <div className="min-h-screen bg-[#e7f8ff] p-6">
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-[calc(100vh-48px)]">
                 <div className="flex flex-col justify-center items-center text-center px-8">
-                    <div className="text-sm text-[#27386d]/60 mb-6">
-                        질문 {question.question_order} / 최대 {start.max_questions}
-                    </div>
-
-                    <h1 className="text-3xl font-bold text-[#27386d] leading-relaxed max-w-[520px]">
-                        {question.question_text}
-                    </h1>
+                    {question && start ? (
+                        <>
+                            <div className="text-sm text-[#27386d]/60 mb-6">
+                                질문 {question.question_order} / 최대 {start.max_questions}
+                            </div>
+                            <h1 className="text-3xl font-bold text-[#27386d] leading-relaxed max-w-[520px]">
+                                {question.question_text}
+                            </h1>
+                        </>
+                    ) : (
+                        <div className="text-[#27386d] text-xl">면접을 불러오는 중...</div>
+                    )}
 
                     {error && (
                         <div className="mt-8 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
@@ -172,7 +172,7 @@ export default function RealInterviewSessionPage() {
                     <div className="bg-white rounded-xl shadow-lg p-6 w-[600px] text-center">
                         <div className="text-sm text-[#27386d]/70 mb-1">{label}</div>
                         <div className="text-4xl font-mono font-bold text-[#27386d]">
-                            {phase === 'sending' ? '...' : `${seconds}초`}
+                            {phase === 'sending' || !start ? '...' : `${seconds}초`}
                         </div>
                     </div>
                 </div>
