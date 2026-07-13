@@ -5,6 +5,7 @@
 """
 import json
 import logging
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,20 @@ class ResumeNotFoundError(Exception):
     """등록된 이력서(원문)가 없음"""
 
 
+_COVER_LETTER_KEYWORDS = (
+    "자기소개서",
+    "자소서",
+    "지원동기",
+    "입사 후 포부",
+    "성장과정",
+    "성격의 장단점",
+    "핵심 경험",
+    "강점",
+    "career_goals",
+    "motivation",
+)
+
+
 def get_resume(db: Session, user_id: int) -> Resume | None:
     return db.query(Resume).filter(Resume.user_id == user_id).first()
 
@@ -31,6 +46,52 @@ def has_resume(db: Session, user_id: int) -> bool:
     """이력서 원문(content)이 등록되어 있는지 여부"""
     resume = get_resume(db, user_id)
     return bool(resume and resume.content)
+
+
+def _coerce_structured(structured: Any) -> dict:
+    if isinstance(structured, dict):
+        return structured
+    if isinstance(structured, str):
+        try:
+            data = json.loads(structured)
+        except json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
+def _has_meaningful_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, dict):
+        return any(_has_meaningful_value(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_meaningful_value(v) for v in value)
+    return value is not None
+
+
+def has_cover_letter(db: Session, user_id: int) -> bool:
+    """업로드된 원문/구조화 데이터에 자기소개서 내용이 있는지 확인한다."""
+    resume = get_resume(db, user_id)
+    if not resume or not resume.content:
+        return False
+
+    structured = _coerce_structured(resume.structured)
+    if _has_meaningful_value(structured.get("self_introduction")):
+        return True
+
+    content = resume.content.lower()
+    return any(keyword.lower() in content for keyword in _COVER_LETTER_KEYWORDS)
+
+
+def get_resume_status(db: Session, user_id: int) -> dict:
+    resume_ready = has_resume(db, user_id)
+    cover_letter_ready = has_cover_letter(db, user_id) if resume_ready else False
+    return {
+        "has_resume": resume_ready,
+        "has_cover_letter": cover_letter_ready,
+        "ready_for_career_diagnosis": resume_ready and cover_letter_ready,
+    }
 
 
 def upsert_resume(db: Session, user_id: int, content: str, filename: str | None = None) -> Resume:

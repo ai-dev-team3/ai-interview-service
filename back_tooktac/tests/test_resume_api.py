@@ -140,11 +140,15 @@ def test_resume_status_reflects_registration(auth_client, test_user, db_session)
     res = auth_client.get("/resume/status")
     assert res.status_code == 200
     assert res.json()["has_resume"] is False
+    assert res.json()["has_cover_letter"] is False
+    assert res.json()["ready_for_career_diagnosis"] is False
 
-    auth_client.post("/resume", data={"resume_text": "저의 이력서입니다."})
+    auth_client.post("/resume", data={"resume_text": "저의 이력서와 자기소개서입니다. 지원동기는 개발 경험입니다."})
 
     res = auth_client.get("/resume/status")
     assert res.json()["has_resume"] is True
+    assert res.json()["has_cover_letter"] is True
+    assert res.json()["ready_for_career_diagnosis"] is True
 
 
 def test_list_questions_without_resume_returns_400(auth_client):

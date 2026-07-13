@@ -37,6 +37,7 @@ def upload_resume(
     questions_generated = (
         resume_service.try_generate_questions(db, resume) if structured else False
     )
+    resume_status = resume_service.get_resume_status(db, user_id)
     logger.info(
         "이력서 저장 완료 (user_id=%s, resume_id=%s, structured=%s, questions=%s)",
         user_id, resume.id, structured, questions_generated,
@@ -46,12 +47,13 @@ def upload_resume(
         "resume_id": resume.id,
         "structured": structured,
         "questions_generated": questions_generated,
+        **resume_status,
     }
 
 
 @router.get("/resume/status")
 def resume_status(db: Session = Depends(get_db), user_id=Depends(get_current_user)):
-    return {"has_resume": resume_service.has_resume(db, user_id)}
+    return resume_service.get_resume_status(db, user_id)
 
 
 # ---------- 질문 풀 CRUD ----------

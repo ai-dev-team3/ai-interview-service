@@ -30,6 +30,7 @@ from app.api import report_router
 from app.api import training_page_router
 from app.api import rank_router
 from app.api import interview_schedule_router
+from app.api import career_router
 import app.repository.model_registry
 
 
@@ -89,3 +90,4 @@ app.include_router(report_router)
 app.include_router(training_page_router)
 app.include_router(rank_router)
 app.include_router(interview_schedule_router)
+app.include_router(career_router)

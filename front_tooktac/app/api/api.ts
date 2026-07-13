@@ -82,9 +82,51 @@ export const uploadResume = async (resumeText: string, filename?: string) => {
   return response.data; // { message, resume_id }
 };
 
-// 이력서 등록 여부 조회
-export const getResumeStatus = async (): Promise<{ has_resume: boolean }> => {
+export type ResumeStatus = {
+  has_resume: boolean;
+  has_cover_letter: boolean;
+  ready_for_career_diagnosis: boolean;
+};
+
+// 이력서/자소서 등록 여부 조회
+export const getResumeStatus = async (): Promise<ResumeStatus> => {
   const response = await api.get('/resume/status');
+  return response.data;
+};
+
+export type CareerCriteriaResult = {
+  criterion_name: string;
+  description: string;
+  score: number;
+  weight: number;
+  feedback: string;
+  matched_keywords: string[];
+};
+
+export type CareerActionPlan = {
+  title: string;
+  detail: string;
+};
+
+export type CareerDiagnosis = {
+  job_group: {
+    id: number;
+    name: string;
+    description: string;
+  };
+  desired_job: string;
+  total_score: number;
+  score_label: string;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  criteria_results: CareerCriteriaResult[];
+  action_plan: CareerActionPlan[];
+  caution: string;
+};
+
+export const createCareerDiagnosis = async (): Promise<CareerDiagnosis> => {
+  const response = await api.post('/career/diagnosis');
   return response.data;
 };
 
