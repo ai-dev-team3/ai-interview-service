@@ -8,6 +8,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from app.repository.career import CoverLetter
 from app.repository.resume import Resume, ResumeQuestion
 from app.services.interview.plan import DEFAULT_QUESTION_TEXT, DEFAULT_QUESTION_TYPE
 from app.services.interview.question_generator import (
@@ -31,6 +32,25 @@ def has_resume(db: Session, user_id: int) -> bool:
     """이력서 원문(content)이 등록되어 있는지 여부"""
     resume = get_resume(db, user_id)
     return bool(resume and resume.content)
+
+
+def has_cover_letter(db: Session, user_id: int) -> bool:
+    return (
+        db.query(CoverLetter.id)
+        .filter(CoverLetter.user_id == user_id)
+        .first()
+        is not None
+    )
+
+
+def get_resume_status(db: Session, user_id: int) -> dict[str, bool]:
+    resume_registered = has_resume(db, user_id)
+    cover_letter_registered = has_cover_letter(db, user_id)
+    return {
+        "has_resume": resume_registered,
+        "has_cover_letter": cover_letter_registered,
+        "ready_for_career_diagnosis": resume_registered and cover_letter_registered,
+    }
 
 
 def upsert_resume(db: Session, user_id: int, content: str, filename: str | None = None) -> Resume:

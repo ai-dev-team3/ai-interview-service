@@ -83,7 +83,13 @@ export const uploadResume = async (resumeText: string, filename?: string) => {
 };
 
 // 이력서 등록 여부 조회
-export const getResumeStatus = async (): Promise<{ has_resume: boolean }> => {
+export type ResumeStatus = {
+  has_resume: boolean;
+  has_cover_letter: boolean;
+  ready_for_career_diagnosis: boolean;
+};
+
+export const getResumeStatus = async (): Promise<ResumeStatus> => {
   const response = await api.get('/resume/status');
   return response.data;
 };

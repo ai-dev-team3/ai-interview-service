@@ -51,7 +51,7 @@ def upload_resume(
 
 @router.get("/resume/status")
 def resume_status(db: Session = Depends(get_db), user_id=Depends(get_current_user)):
-    return {"has_resume": resume_service.has_resume(db, user_id)}
+    return resume_service.get_resume_status(db, user_id)
 
 
 # ---------- 질문 풀 CRUD ----------
