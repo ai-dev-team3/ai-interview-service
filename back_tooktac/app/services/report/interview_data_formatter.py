@@ -4,6 +4,7 @@ from collections import defaultdict
 from sqlalchemy.orm import Session
 from app.repository.interview import InterviewSession, InterviewQuestion, InterviewAnswer
 from app.repository.analysis import EvaluationResult, VideoEvaluationResult
+from app.services.score.scale import clamp_score, from_ten_point, from_unit
 from app.services.score.scoring import QuestionTypeWeights
 from sqlalchemy.inspection import inspect
 import json
@@ -24,14 +25,14 @@ def _score(result, attr: str) -> float:
 
 def calculate_final_score(text_result: EvaluationResult, video_result: VideoEvaluationResult, question_type: str) -> int:
     """
-    질문 유형에 따라 text/voice/video 점수를 가중 평균으로 계산
+    질문 유형에 따라 text/voice/video 점수를 가중 평균으로 계산 (0~100)
     """
     return QuestionTypeWeights.calculate_weighted_score({
         "type": question_type,
         "detailAnalysis": {
-            "text": {"score": _score(text_result, "final_text_score")},
-            "voice": {"score": _score(text_result, "final_speech_score")},
-            "video": {"score": _score(video_result, "final_video_score")},
+            "text": {"score": clamp_score(_score(text_result, "final_text_score"))},
+            "voice": {"score": clamp_score(_score(text_result, "final_speech_score"))},
+            "video": {"score": clamp_score(_score(video_result, "final_video_score"))},
         }
     })
 
@@ -141,27 +142,35 @@ def generate_interview_json_from_session(db: Session, session_id: int) -> dict:
             "question_text": q.question_text,
             "user_answer": answer.answer_text if answer else "",
             "model_answer": text_result.model_answer if text_result else "",
+            # 화면에 뜨는 값은 전부 0~100 이다. 내부 스케일(유사도 0~1, LLM 척도 1~10,
+            # 음성 배분 0~40/0~20)을 여기서 한 번에 맞춘다. 각자 알아서 변환하면
+            # similarity * 10 처럼 조용히 틀린 값이 화면에 뜬다 — 실제로 그랬다.
             "detail_analysis": {
                 "text": {
-                    "score": _score(text_result, "final_text_score"),
-                    "similarity": _score(text_result, "similarity"),
-                    "accuracy": _score(text_result, "knowledge_score"),
-                    "understanding": _score(text_result, "intent_score")
+                    "score": clamp_score(_score(text_result, "final_text_score")),
+                    "similarity": from_unit(_score(text_result, "similarity")),
+                    "accuracy": from_ten_point(_score(text_result, "knowledge_score")),
+                    "understanding": from_ten_point(_score(text_result, "intent_score"))
                 },
                 "voice": {
-                    "score": _score(text_result, "final_speech_score"),
-                    "speed": {"score": round(_score(text_result, "speed_score") * 2.5)},
-                    "fluency": {"score": round(_score(text_result, "filler_score") * 2.5)},
-                    "tone": {"score": round(_score(text_result, "pitch_score") * 5.0)},
+                    "score": clamp_score(_score(text_result, "final_speech_score")),
+                    "speed": {"score": clamp_score(_score(text_result, "speed_score") * 2.5)},
+                    "fluency": {"score": clamp_score(_score(text_result, "filler_score") * 2.5)},
+                    "tone": {"score": clamp_score(_score(text_result, "pitch_score") * 5.0)},
                     "speed_label": text_result.speed_label if text_result else "없음",
                     "fluency_label": text_result.fluency_label if text_result else "없음",
                     "tone_label": text_result.tone_label if text_result else "없음"
                 },
                 "video": {
-                    "score": _score(video_result, "final_video_score"),
-                    "gaze_rate": {"percentage": _score(video_result, "gaze_score")},
-                    "shoulder_posture": {"score": 100 - _score(video_result, "shoulder_warning") * 10},
-                    "hand_posture": {"score": 100 - _score(video_result, "hand_warning") * 10}
+                    "score": clamp_score(_score(video_result, "final_video_score")),
+                    "gaze_rate": {"percentage": clamp_score(_score(video_result, "gaze_score"))},
+                    # 경고가 많으면 음수가 됐다. 실제로 -310 이 나왔다.
+                    "shoulder_posture": {
+                        "score": clamp_score(100 - _score(video_result, "shoulder_warning") * 10)
+                    },
+                    "hand_posture": {
+                        "score": clamp_score(100 - _score(video_result, "hand_warning") * 10)
+                    }
                 }
             },
             "feedback": (
