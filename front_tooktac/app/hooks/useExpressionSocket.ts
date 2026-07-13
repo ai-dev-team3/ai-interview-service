@@ -18,6 +18,11 @@ import {
     prefetchLandmarkers,
 } from "@/lib/postureVision";
 
+// 클라이언트 모드에서 랜드마커를 기다려주는 시간. 이 안에 준비되면 JPEG를 한 장도
+// 보내지 않는다 -> 서버가 MediaPipe 인스턴스를 띄울 일이 없다.
+// 넘기면 그때부터 JPEG를 보낸다 (분석을 통째로 잃는 것보다는 낫다).
+const LANDMARKER_GRACE_MS = 2000;
+
 interface UseExpressionSocketProps {
     isAnswerActive: boolean;
     questionId: string;
@@ -91,20 +96,30 @@ export function useExpressionSocket({
             }, "image/jpeg");
         };
 
+        const startedAt = Date.now();
+
         const tick = () => {
             if (video.readyState < 2 || socket.readyState !== WebSocket.OPEN) return;
 
-            // 모드는 아이스브레이킹 벤치마크(약 7초)가 끝나야 정해진다. 준비 시간을 기다리지 않고
-            // 답변을 시작하면 소켓이 열릴 때는 아직 미정이다. 그래서 매 프레임 다시 읽는다.
+            // 모드는 벤치마크(약 5초)가 끝나야 정해진다. 준비 시간을 기다리지 않고 답변을
+            // 시작하면 소켓이 열릴 때는 아직 미정이다. 그래서 매 프레임 다시 읽는다.
             // 한 번만 읽으면 그 답변 내내 서버 경로에 갇힌다.
             const useClient = !failed && getPostureMode() === "client";
             if (useClient) ensureLandmarkers();
 
             try {
-                // 클라이언트 모드라도 랜드마커가 아직 없으면 JPEG를 보낸다.
-                // 모델 로딩(수 초) 동안 프레임을 버리면 그만큼 분석이 유실된다.
-                if (useClient && landmarkers) sendLandmarks();
-                else sendJpeg();
+                if (useClient && landmarkers) {
+                    sendLandmarks();
+                    return;
+                }
+
+                // 클라이언트 모드인데 랜드마커가 아직 준비 안 됐다면 잠깐 기다린다.
+                // 여기서 JPEG를 한 장이라도 보내면 서버가 그 연결 전용 MediaPipe
+                // 인스턴스(약 100MB)를 띄운다 — 곧 랜드마크로 갈아탈 텐데 낭비다.
+                // 모델은 보통 벤치마크 때 이미 캐시에 올라와 있어 몇 프레임이면 준비된다.
+                if (useClient && Date.now() - startedAt < LANDMARKER_GRACE_MS) return;
+
+                sendJpeg();
             } catch (e) {
                 fallbackToServer(`추론 실패: ${e}`);
             }
