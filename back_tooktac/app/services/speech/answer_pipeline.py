@@ -6,8 +6,10 @@ audio.py 웹소켓 핸들러에서 계산 로직을 분리해 테스트 가능�
 """
 import asyncio
 import logging
+import os
 import subprocess
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from app.services.feedback.speechfeedback import SpeechFeedbackGenerator
@@ -16,6 +18,34 @@ from app.services.stt.stt_service import STTService
 from app.services.text.orchestrator import EvaluationOrchestrator
 
 logger = logging.getLogger(__name__)
+
+# 빠른 길과 느린 길이 스레드를 놓고 다투면 안 된다.
+#
+# asyncio.to_thread 의 기본 스레드 풀은 min(32, cpu+4) 개다. 2 vCPU 배포 서버면 6개.
+# 그 6개를 백그라운드 분석(pitch 는 답변당 순수 CPU 2초, LLM 은 대기)과
+# 자세 폴백 추론이 나눠 쓴다. 백그라운드가 풀을 채우면 사용자를 기다리게 하는 STT 가
+# 큐에서 대기하고, 실전 면접의 준비 시간 10초 예산이 날아간다.
+#
+# 그래서 사용자를 기다리게 하는 작업(ffmpeg 변환, STT)에 전용 풀을 준다.
+# 이 풀은 백그라운드가 아무리 밀려도 비어 있다.
+_FAST_EXECUTOR = ThreadPoolExecutor(
+    max_workers=int(os.getenv("FAST_PATH_WORKERS", "4")),
+    thread_name_prefix="fast-path",
+)
+
+# 백그라운드 CPU 작업(pitch, 임베딩). 코어를 다 먹어치우지 않게 상한을 둔다.
+_SLOW_EXECUTOR = ThreadPoolExecutor(
+    max_workers=int(os.getenv("BACKGROUND_WORKERS", str(max(2, (os.cpu_count() or 2) // 2)))),
+    thread_name_prefix="analysis",
+)
+
+
+async def _run_fast(fn, *args):
+    return await asyncio.get_running_loop().run_in_executor(_FAST_EXECUTOR, fn, *args)
+
+
+async def _run_slow(fn, *args):
+    return await asyncio.get_running_loop().run_in_executor(_SLOW_EXECUTOR, fn, *args)
 
 
 class FfmpegNotFoundError(Exception):
@@ -78,8 +108,8 @@ class AnswerAnalysisPipeline:
         cmd = ["ffmpeg", "-i", webm_path, "-ar", "16000", "-ac", "1",
                "-f", "wav", wav_path, "-y", "-loglevel", "error"]
         try:
-            # 동기 subprocess는 이벤트 루프를 멈추므로 워커 스레드로 위임
-            proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
+            # 동기 subprocess는 이벤트 루프를 멈추므로 워커 스레드로 위임 (빠른 길)
+            proc = await _run_fast(lambda: subprocess.run(cmd, capture_output=True))
         except FileNotFoundError as e:
             raise FfmpegNotFoundError("ffmpeg를 찾을 수 없습니다. 서버에 설치가 필요합니다.") from e
         if proc.returncode != 0:
@@ -93,7 +123,7 @@ class AnswerAnalysisPipeline:
         다음 질문을 만든다. 준비 시간(10초) 안에 끝나야 한다.
         """
         stt = self.stt_factory(self.stt_type)
-        text, raw = await asyncio.to_thread(stt.transcribe, wav_path)
+        text, raw = await _run_fast(stt.transcribe, wav_path)
         return (text or "").strip(), raw
 
     async def analyze_and_evaluate(
@@ -113,12 +143,14 @@ class AnswerAnalysisPipeline:
         speed = analyzer.speech_speed_calculate()
 
         # 서로 독립인 작업들 → 동시에 실행 (가장 느린 작업 시간만큼만 소요)
+        #   pitch : 순수 CPU  -> 백그라운드 전용 풀
+        #   LLM   : 네트워크 대기 -> 스레드를 아예 안 쓴다 (진짜 비동기)
         tasks = [
-            asyncio.to_thread(analyzer.calculate_pitch_variation, wav_path),
-            asyncio.to_thread(self._evaluate_safe, question_text, text_clean, question_type),
+            _run_slow(analyzer.calculate_pitch_variation, wav_path),
+            self._evaluate_safe(question_text, text_clean, question_type),
         ]
         if self.filler_from_vito:
-            tasks.append(asyncio.to_thread(self._vito_transcribe_safe, wav_path))
+            tasks.append(_run_slow(self._vito_transcribe_safe, wav_path))
 
         results = await asyncio.gather(*tasks)
         pitch, evaluation = results[0], results[1]
@@ -141,11 +173,23 @@ class AnswerAnalysisPipeline:
             logger.exception("Vito STT 실패 — 간투어 분석 없이 진행")
             return ""
 
-    def _evaluate_safe(self, question_text: str, text_clean: str, question_type: str) -> Optional[dict]:
-        """LLM 평가 — 실패 시 None (라우터가 최소 결과 저장으로 처리)"""
+    async def _evaluate_safe(
+        self, question_text: str, text_clean: str, question_type: str
+    ) -> Optional[dict]:
+        """LLM 평가 — 실패 시 None (라우터가 최소 결과 저장으로 처리)
+
+        LLM 호출은 약 17초의 네트워크 대기다. 동기로 두면 그동안 스레드 하나를
+        붙잡고 논다. 비동기로 부르면 스레드를 아예 안 쓴다.
+        평가기를 주입받은 경우(테스트의 페이크)는 비동기 변형이 없을 수 있으므로
+        그때는 스레드로 돌린다.
+        """
+        orchestrator = self._orchestrator or get_orchestrator_singleton()
         try:
-            orchestrator = self._orchestrator or get_orchestrator_singleton()
-            return orchestrator.evaluate_answer(question_text, text_clean, question_type)
+            if hasattr(orchestrator, "aevaluate_answer"):
+                return await orchestrator.aevaluate_answer(question_text, text_clean, question_type)
+            return await _run_slow(
+                orchestrator.evaluate_answer, question_text, text_clean, question_type
+            )
         except Exception:
             logger.exception("LLM 평가 실패")
             return None

@@ -3,6 +3,31 @@ import librosa
 import numpy as np
 import re
 
+# 사람 말소리의 기본주파수 범위. 남성 85~180Hz, 여성 165~255Hz 를 넉넉히 감싼다.
+PITCH_FMIN_HZ = 65
+PITCH_FMAX_HZ = 400
+PITCH_HOP = 1024
+MIN_VOICED_FRAMES = 30
+OCTAVE_ST = 12  # 중앙값에서 한 옥타브 넘게 벗어난 프레임은 추정 오류로 본다
+
+# 음조 변동성 경계 (세미톤 표준편차).
+# 음성학에서 통용되는 범위를 따랐다. 손에 있던 샘플 8개는 전부 2.8~4.5(평범한 화자)라
+# 단조로운/과장된 화자로 경계를 검증하지는 못했다.
+MONOTONE_ST = 1.5      # 이 아래는 단조로움
+NATURAL_MIN_ST = 2.0   # 자연스러운 억양의 하한
+NATURAL_MAX_ST = 5.0   # 자연스러운 억양의 상한
+EXCESSIVE_ST = 6.0     # 이 위는 과장·불안정
+ZERO_ST = 8.0          # 여기서 0점
+
+
+def _pitch_feedback(st_std: float) -> str:
+    if st_std < MONOTONE_ST:
+        return "음조가 단조로워 들릴 수 있어요. 억양에 변화를 줘보세요."
+    if st_std > EXCESSIVE_ST:
+        return "음조 변화가 과해 산만하게 들릴 수 있어요."
+    return "음조 변화가 적절합니다"
+
+
 class SpeechAnalyzer:
     def __init__(self, result: Dict):
         """
@@ -55,30 +80,48 @@ class SpeechAnalyzer:
         }
     
     def calculate_pitch_variation(self, wav_path: str) -> Dict:
-        """
-        librosa로 음성의 pitch 변화 폭 분석 (단조로움 여부 판단)
+        """음조 변동성을 세미톤 표준편차로 잰다.
+
+        Hz가 아니라 세미톤(로그)으로 재는 이유:
+          기본 음높이가 남성은 100Hz대, 여성은 200Hz대다. 같은 억양이라도 목소리가
+          높으면 Hz 표준편차가 2배로 나온다. 실측(남 135/137Hz, 여 284/272Hz)에서도
+          Hz std는 35~60으로 성별을 따라 갈렸지만 세미톤 std는 2.8~4.5로 모였다.
+          Hz로 고정 임계값을 쓰면 저음 화자가 자동으로 '단조로움'이 된다.
+
+          semitone = 12 * log2(f0 / 화자 자신의 중앙값)
+          중앙값 기준이라 화자의 절대 음높이가 상쇄된다.
+
+        탐색 범위(65~400Hz)는 사람 말소리 기준이다. 예전에는 C2~C7(65~2093Hz)을
+        뒤졌는데, 2093Hz는 아무도 내지 않는 음역이라 계산 대부분을 버리고 있었다.
+        범위를 좁히고 hop을 늘려 90초 답변 기준 14초 -> 2초가 됐다.
         """
         try:
-            # 1. librosa로 오디오 로드 (샘플링 주파수 16kHz로 맞춤)
-            y, sr = librosa.load(wav_path, sr=16000)
+            y, _ = librosa.load(wav_path, sr=16000)
 
-            # 2. pyin으로 주파수(Hz) 추출 (fmin, fmax 설정은 사람이 낼 수 있는 범위 기준)
-            f0, _, _ = librosa.pyin(y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
+            f0, _, _ = librosa.pyin(y, fmin=PITCH_FMIN_HZ, fmax=PITCH_FMAX_HZ,
+                                    hop_length=PITCH_HOP)
 
-            # 3. NaN 제거 (비발화 구간 제외)
-            f0_filtered = f0[~np.isnan(f0)]
-
-            if len(f0_filtered) < 30:
+            voiced = f0[~np.isnan(f0)]  # 비발화 구간 제외
+            if len(voiced) < MIN_VOICED_FRAMES:
                 return {"pitch_feedback": "음성이 짧아 분석 불가", "pitch_std": 0.0}
 
-            # 4. 30프레임 단위로 표준편차 분석
-            for i in range(0, len(f0_filtered) - 30 + 1, 30):
-                window = f0_filtered[i:i + 30]
-                std = np.std(window)
-                if std < 10:
-                    return {"pitch_feedback": "단조로운 음조로 들릴 수 있어요", "pitch_std": round(std, 2)}
+            median = float(np.median(voiced))
+            semitones = 12 * np.log2(voiced / median)
 
-            return {"pitch_feedback": "음조 변화가 적절합니다", "pitch_std": round(np.std(f0_filtered), 2)}
+            # 옥타브 오검출을 버린다. pyin 은 기본주파수를 절반/두 배로 잘못 짚는 일이 있다.
+            # 실측 사례: 한 화자의 프레임 10%가 중앙값보다 -22 세미톤(거의 2옥타브 아래)에
+            # 몰려 std 가 9.20 으로 튀었다. 그것만 빼면 2.85 로, 다른 화자들과 같은 범위였다.
+            # 사람이 자기 중앙 음높이에서 한 옥타브 넘게 벗어나 말하지는 않는다.
+            semitones = semitones[np.abs(semitones) <= OCTAVE_ST]
+            if len(semitones) < MIN_VOICED_FRAMES:
+                return {"pitch_feedback": "음성이 짧아 분석 불가", "pitch_std": 0.0}
+
+            st_std = float(np.std(semitones))
+
+            return {
+                "pitch_feedback": _pitch_feedback(st_std),
+                "pitch_std": round(st_std, 2),  # 단위: 세미톤 (예전에는 Hz였다)
+            }
 
         except Exception as e:
             return {"pitch_feedback": f"pitch 분석 실패: {str(e)}", "pitch_std": 0.0}

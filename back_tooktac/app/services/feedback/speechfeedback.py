@@ -1,5 +1,13 @@
 from typing import Dict, List, Tuple
 
+from app.services.speech.speech_analyzer import (
+    EXCESSIVE_ST,
+    MONOTONE_ST,
+    NATURAL_MAX_ST,
+    NATURAL_MIN_ST,
+    ZERO_ST,
+)
+
 class SpeechFeedbackGenerator:
     def __init__(self, speed_result: Dict, pitch_result: Dict, filler_result: List[Tuple[str, int]]):
         self.speed_result = speed_result
@@ -31,36 +39,36 @@ class SpeechFeedbackGenerator:
         else:
             return max(0, 34 - (count - 3) * 5)
 
-    def score_pitch(self, std: float) -> int:
-        """
-        음조 점수 (최대 20점):
-        - 이상적 변화 범위: 10~20Hz → 20점
-        - 너무 낮거나 높으면 대칭적으로 감점
-        """
+    def score_pitch(self, st_std: float) -> int:
+        """음조 점수 (최대 20점). 입력은 세미톤 표준편차다 (예전에는 Hz였다).
 
-        # 🎯 1. 이상적 변화
-        if 10 <= std <= 20:
+        예전 산식은 10~20Hz를 이상적이라 봤는데, 실제 화자는 전부 35~60Hz였다.
+        즉 모든 사람이 0점이었다. 게다가 '평탄한 창이 하나라도 있으면' 그 창의
+        작은 std가 반환돼 점수가 올라갔다 — 단조로운 사람이 더 높은 점수를 받았다.
+
+        지금은 발화 전체의 세미톤 변동성 하나로만 매긴다.
+        """
+        if st_std <= 0:
+            return 0
+
+        if NATURAL_MIN_ST <= st_std <= NATURAL_MAX_ST:
             return 20
 
-        # 🎯 2. 단조로운 경우 (0 ~ 10 미만)
-        elif std < 10:
-            # 0~3Hz → 0~5점, 3~7Hz → 6~12점, 7~10Hz → 13~17점
-            if std < 3:
-                return int((std / 3) * 5)  # 0~5점
-            elif std < 7:
-                return int(6 + ((std - 3) / 4) * 6)  # 6~12점
-            else:
-                return int(13 + ((std - 7) / 3) * 4)  # 13~17점
+        if st_std < NATURAL_MIN_ST:
+            # 단조로움 쪽. MONOTONE_ST(1.5) 까지는 0~8점, 거기서 2.0 까지 8~20점.
+            if st_std <= MONOTONE_ST:
+                return int(round(st_std / MONOTONE_ST * 8))
+            ratio = (st_std - MONOTONE_ST) / (NATURAL_MIN_ST - MONOTONE_ST)
+            return int(round(8 + ratio * 12))
 
-        # 🎯 3. 과도한 변화 (20 초과)
-        else:
-            # 20~23Hz → 17~13점, 23~27Hz → 12~6점, 27 이상 → 5~0점
-            if std <= 23:
-                return int(17 - ((std - 20) / 3) * 4)  # 17~13점
-            elif std <= 27:
-                return int(12 - ((std - 23) / 4) * 6)  # 12~6점
-            else:
-                return max(0, int(5 - ((std - 27) / 3) * 5))  # 5~0점
+        # 과장 쪽. 5.0~6.0 은 20~14점, 6.0~8.0 은 14~0점.
+        if st_std <= EXCESSIVE_ST:
+            ratio = (st_std - NATURAL_MAX_ST) / (EXCESSIVE_ST - NATURAL_MAX_ST)
+            return int(round(20 - ratio * 6))
+        if st_std < ZERO_ST:
+            ratio = (st_std - EXCESSIVE_ST) / (ZERO_ST - EXCESSIVE_ST)
+            return max(0, int(round(14 - ratio * 14)))
+        return 0
 
     def classify_labels(self) -> Dict[str, str]:
         """
@@ -84,10 +92,12 @@ class SpeechFeedbackGenerator:
         else:
             fluency_label = "버벅거림"
 
-        # 3. pitch 표준편차: tone
+        # 3. 음조 변동성(세미톤 std): tone
         pitch_std = self.pitch_result.get("pitch_std", 0)
-        if pitch_std < 10:
+        if pitch_std < MONOTONE_ST:
             tone_label = "단조로움"
+        elif pitch_std > EXCESSIVE_ST:
+            tone_label = "과장됨"
         else:
             tone_label = "밝음"
 
