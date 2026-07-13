@@ -103,3 +103,27 @@ def test_답변이_없으면_그렇게_표시한다():
     block = format_history([("질문", "")])
 
     assert "(답변 없음)" in block
+
+
+def test_구조화_출력이_폴백_모델에도_걸린다():
+    """스키마는 with_fallbacks 로 묶기 '전에' 각 모델에 걸어야 한다.
+
+    RunnableWithFallbacks 에는 with_structured_output 이 없다. 순서를 잘못 잡으면
+    주 모델만 스키마가 걸리고, 폴백으로 넘어간 순간 형식 강제가 사라진다 —
+    그리고 그건 Gemini 가 죽었을 때만 드러난다.
+    """
+    from langchain_core.runnables import RunnableWithFallbacks
+
+    from app.services.interview.next_question import NextQuestionOut
+    from app.services.llm import get_chat_model
+
+    model = get_chat_model(primary="gemini", schema=NextQuestionOut)
+
+    assert isinstance(model, RunnableWithFallbacks), "폴백이 구성되지 않았다"
+
+    for runnable in [model.runnable, *model.fallbacks]:
+        # with_structured_output 은 모델을 파서와 묶은 시퀀스로 감싼다.
+        # 감싸지지 않았다면 raw 챗모델이 그대로 남아 있다는 뜻이다.
+        assert type(runnable).__name__ not in ("ChatGoogleGenerativeAI", "ChatOpenAI"), (
+            f"{type(runnable).__name__} 에 스키마가 안 걸렸다"
+        )
