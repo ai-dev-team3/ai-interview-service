@@ -1,3 +1,5 @@
+from app.services.score.scale import clamp_score
+
 # app/utils/scoring.py
 
 class QuestionTypeWeights:
@@ -27,4 +29,6 @@ class QuestionTypeWeights:
             video_score * weights['video']
         )
 
-        return round(weighted_score, 1)
+        # 가중치 합이 1이므로 입력이 0~100이면 결과도 0~100이다.
+        # 그래도 잘라둔다 — 예전에 영상 점수가 음수였고 그 탓에 문항 점수가 -5.6까지 갔다.
+        return float(clamp_score(weighted_score))

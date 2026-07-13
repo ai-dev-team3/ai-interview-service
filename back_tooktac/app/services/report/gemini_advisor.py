@@ -1,5 +1,7 @@
 """LLM 기반 AI 조언 생성 (LCEL 병렬 체인)"""
 import logging
+
+from app.services.score.scale import clamp_score
 from typing import Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
@@ -11,6 +13,28 @@ from app.services.llm import get_chat_model
 from .models import QuestionAnalysis
 
 logger = logging.getLogger(__name__)
+
+def _clamp_scores(items):
+    """LLM이 뱉은 점수를 0~100으로 강제한다.
+
+    프롬프트에서 0~100을 예시로 보여주지만 LLM은 그걸 지킬 의무가 없다.
+    실제로 report_improvement.score 에 689 가 저장돼 있었다.
+    """
+    if not isinstance(items, list):
+        logger.warning("강점/개선점 응답이 목록이 아님: %r", type(items).__name__)
+        return []
+
+    cleaned = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("score")
+        score = clamp_score(raw)
+        if raw is not None and score != raw:
+            logger.warning("LLM 점수 %r 를 %d 로 잘랐다 (0~100)", raw, score)
+        cleaned.append({**item, "score": score})
+    return cleaned
+
 
 _PERSONALIZED_TEMPLATE = """
 {user_nickname}님의 면접 전체를 분석해서 개인 맞춤 조언을 생성해주세요.
@@ -155,18 +179,18 @@ class GeminiAdvisor:
         }).strip()
 
     def _run_strengths(self, context: Dict) -> List[Dict]:
-        return self._strengths_chain.invoke({
+        return _clamp_scores(self._strengths_chain.invoke({
             "user_nickname": context["user_nickname"],
             "analysis_summary": context["analysis_summary"],
             "total_questions": context["total_questions"],
-        })
+        }))
 
     def _run_improvements(self, context: Dict) -> List[Dict]:
-        return self._improvements_chain.invoke({
+        return _clamp_scores(self._improvements_chain.invoke({
             "user_nickname": context["user_nickname"],
             "analysis_summary": context["analysis_summary"],
             "total_questions": context["total_questions"],
-        })
+        }))
 
     def _run_summaries(self, context: Dict) -> List[str]:
         # 질문 요약은 각각 독립적이므로 batch로 동시 실행

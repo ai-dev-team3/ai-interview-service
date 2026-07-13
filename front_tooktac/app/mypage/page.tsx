@@ -6,6 +6,8 @@ import api, {
   getResumeStatus,
   getInterviewSchedules,
   createInterviewSchedule,
+  updateInterviewSchedule,
+  deleteInterviewSchedule,
   type InterviewSchedule,
 } from '@/api/api';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -59,6 +61,8 @@ export default function MyPage() {
   const [scheduleDate, setScheduleDate] = useState(fmtYMD(new Date()));
   const [scheduleDescription, setScheduleDescription] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<InterviewSchedule | null>(null);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<number | null>(null);
   const schedulesWithinMonth = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -140,13 +144,22 @@ export default function MyPage() {
   };
 
   const openScheduleModal = () => {
+    setEditingSchedule(null);
     setScheduleDate(fmtYMD(new Date()));
     setScheduleDescription('');
     setIsScheduleModalOpen(true);
   };
 
+  const openEditScheduleModal = (schedule: InterviewSchedule) => {
+    setEditingSchedule(schedule);
+    setScheduleDate(fmtYMD(new Date(schedule.scheduled_at)));
+    setScheduleDescription(schedule.description ?? '');
+    setIsScheduleModalOpen(true);
+  };
+
   const closeScheduleModal = () => {
     if (scheduleSaving) return;
+    setEditingSchedule(null);
     setIsScheduleModalOpen(false);
   };
 
@@ -159,18 +172,53 @@ export default function MyPage() {
 
     setScheduleSaving(true);
     try {
-      const saved = await createInterviewSchedule({
+      const payload = {
         scheduled_at: scheduleDate,
         description: scheduleDescription.trim(),
-      });
-      setInterviewSchedules(prev => sortSchedules([...prev, saved]));
+      };
+      const saved = editingSchedule
+        ? await updateInterviewSchedule(editingSchedule.id, payload)
+        : await createInterviewSchedule(payload);
+
+      setInterviewSchedules(prev =>
+        editingSchedule
+          ? sortSchedules(prev.map(schedule => schedule.id === saved.id ? saved : schedule))
+          : sortSchedules([...prev, saved])
+      );
       setCurrentDate(new Date(saved.scheduled_at));
+      setEditingSchedule(null);
       setIsScheduleModalOpen(false);
-      setToast('면접 일정이 추가되었습니다.');
+      setToast(editingSchedule ? '면접 일정이 수정되었습니다.' : '면접 일정이 추가되었습니다.');
     } catch {
-      setToast('면접 일정 추가에 실패했습니다. 다시 시도해주세요.');
+      setToast(
+        editingSchedule
+          ? '면접 일정 수정에 실패했습니다. 다시 시도해주세요.'
+          : '면접 일정 추가에 실패했습니다. 다시 시도해주세요.'
+      );
     } finally {
       setScheduleSaving(false);
+    }
+  };
+
+  const handleScheduleDelete = async (schedule: InterviewSchedule) => {
+    if (deletingScheduleId !== null) return;
+
+    const confirmed = window.confirm(`${formatScheduleDate(schedule.scheduled_at)} 면접 일정을 삭제할까요?`);
+    if (!confirmed) return;
+
+    setDeletingScheduleId(schedule.id);
+    try {
+      await deleteInterviewSchedule(schedule.id);
+      setInterviewSchedules(prev => prev.filter(item => item.id !== schedule.id));
+      if (editingSchedule?.id === schedule.id) {
+        setEditingSchedule(null);
+        setIsScheduleModalOpen(false);
+      }
+      setToast('면접 일정이 삭제되었습니다.');
+    } catch {
+      setToast('면접 일정 삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setDeletingScheduleId(null);
     }
   };
 
@@ -289,7 +337,9 @@ export default function MyPage() {
             className="w-full max-w-md bg-white rounded-2xl p-6 shadow-xl"
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-[#27386d]">면접 일정 추가</h2>
+              <h2 className="text-lg font-semibold text-[#27386d]">
+                {editingSchedule ? '면접 일정 수정' : '면접 일정 추가'}
+              </h2>
               <button
                 type="button"
                 onClick={closeScheduleModal}
@@ -338,7 +388,9 @@ export default function MyPage() {
                 disabled={scheduleSaving}
                 className="px-4 py-2 rounded-full bg-[#6ce5e8] text-[#27386d] text-sm font-medium hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {scheduleSaving ? '추가 중...' : '추가하기'}
+                {scheduleSaving
+                  ? editingSchedule ? '수정 중...' : '추가 중...'
+                  : editingSchedule ? '수정하기' : '추가하기'}
               </button>
             </div>
           </form>
@@ -435,13 +487,35 @@ export default function MyPage() {
                     className="flex items-start gap-3 rounded-lg border border-gray-100 px-4 py-3"
                   >
                     <div className="mt-2 w-3 h-3 bg-[#6ce5e8] rounded-full shrink-0" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="text-lg font-bold text-[#27386d]">
                         {formatScheduleDate(schedule.scheduled_at)}
                       </div>
                       <div className="text-sm text-gray-700 break-words">
                         {schedule.description || '등록된 설명이 없습니다.'}
                       </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditScheduleModal(schedule)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-[#27386d] hover:bg-[#e7f8ff] disabled:opacity-60"
+                        aria-label="면접 일정 수정"
+                        title="수정"
+                        disabled={deletingScheduleId === schedule.id}
+                      >
+                        <i className="ri-pencil-line text-lg" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleDelete(schedule)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-red-500 hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                        aria-label="면접 일정 삭제"
+                        title="삭제"
+                        disabled={deletingScheduleId === schedule.id}
+                      >
+                        <i className={deletingScheduleId === schedule.id ? 'ri-loader-4-line text-lg' : 'ri-delete-bin-line text-lg'} />
+                      </button>
                     </div>
                   </div>
                 ))}

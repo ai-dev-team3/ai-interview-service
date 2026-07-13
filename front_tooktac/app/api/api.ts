@@ -180,6 +180,21 @@ export const createInterviewSchedule = async (payload: {
   return response.data.data;
 };
 
+export const updateInterviewSchedule = async (
+  id: number,
+  payload: {
+    scheduled_at: string;
+    description?: string;
+  }
+): Promise<InterviewSchedule> => {
+  const response = await api.patch(`/interview-schedules/${id}`, payload);
+  return response.data.data;
+};
+
+export const deleteInterviewSchedule = async (id: number): Promise<void> => {
+  await api.delete(`/interview-schedules/${id}`);
+};
+
 // ---------- 면접 세션 ----------
 
 // 진행 중인 면접 세션 ID 저장/조회 (탭·재시작 간 혼선 방지용으로 백엔드에 명시 전달)

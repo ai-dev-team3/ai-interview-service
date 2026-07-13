@@ -11,6 +11,7 @@ from typing import Dict, Optional
 import cv2
 import numpy as np
 
+from app.services.score.scale import clamp_score
 from app.services.vision.posture_rules import (
     FACE_INDICES,
     POSE_INDICES,
@@ -91,18 +92,29 @@ class PostureSessionState:
         self.hand_prev_state = step["hand_dir"]  # 이전 상태 갱신
 
     def finalize(self) -> Dict[str, int]:
-        # 누적 결과로 최종 점수 산출
-        gaze_score = int((self.center_frames / self.total_frames) * 100) if self.total_frames > 0 else 0  # 정면 응시율 점수
-        shoulder_score = max(0, 50 - 5 * self.shoulder_warning_count)  # 어깨 경고 기반 점수
-        hand_score = max(0, 50 - 5 * self.hand_warning_count)  # 손 경고 기반 점수
-        total_score = gaze_score + shoulder_score + hand_score - 100  # 합산 후 0~100 스케일 유사화
+        """누적 결과로 최종 영상 점수를 낸다. 결과는 항상 0~100이다.
+
+        예전 산식은 gaze + shoulder + hand - 100 이었다. gaze 는 0~100, 어깨와 손은
+        각각 0~50 이므로 범위가 -100~100 이었다. 실제로 DB 에 -54 점이 저장돼 있었다.
+        정면을 거의 못 본 사용자는 음수를 받고, 그게 리포트 평균까지 끌어내렸다.
+
+        지금은 응시(0~100)와 자세(어깨+손, 0~100)를 반반 섞는다.
+        """
+        gaze_score = (
+            int((self.center_frames / self.total_frames) * 100) if self.total_frames > 0 else 0
+        )
+        shoulder_score = max(0, 50 - 5 * self.shoulder_warning_count)  # 0~50
+        hand_score = max(0, 50 - 5 * self.hand_warning_count)          # 0~50
+        posture_score = shoulder_score + hand_score                     # 0~100
+
+        video_score = clamp_score(gaze_score * 0.5 + posture_score * 0.5)
 
         return {
-            "gaze_rate_score": gaze_score,  # 정면 응시 점수
-            "shoulder_posture_warning_count": self.shoulder_warning_count,  # 어깨 경고 수
-            "hand_posture_warning_count": self.hand_warning_count,  # 손 경고 수
-            "shoulder_hand_score": shoulder_score + hand_score,  # 어깨+손 합산 점수
-            "video_score": total_score  # 최종 비디오 점수
+            "gaze_rate_score": gaze_score,
+            "shoulder_posture_warning_count": self.shoulder_warning_count,
+            "hand_posture_warning_count": self.hand_warning_count,
+            "shoulder_hand_score": posture_score,
+            "video_score": video_score,
         }
 
 
