@@ -41,7 +41,17 @@ def get_orchestrator_singleton() -> EvaluationOrchestrator:
 
 
 class AnswerAnalysisPipeline:
-    """webm→wav 변환, STT, 음성 분석, LLM 평가를 담당 (DB 저장은 라우터 책임)"""
+    """webm→wav 변환, STT, 음성 분석, LLM 평가를 담당 (DB 저장은 라우터 책임)
+
+    연습 면접과 실전 면접이 STT를 달리 쓴다.
+
+      연습: Clova(외부 API) + Vito(간투어 보조)
+        Clova는 간투어를 지워버리므로 Vito를 한 번 더 돌려야 간투어를 센다.
+
+      실전: SenseVoice(로컬 GPU) 하나로 끝
+        간투어가 텍스트에 그대로 남으므로 Vito가 필요 없다. 외부 STT 호출이
+        0회가 되고, 병렬 작업도 하나 줄어 백그라운드 분석이 가벼워진다.
+    """
 
     def __init__(
         self,
@@ -49,11 +59,20 @@ class AnswerAnalysisPipeline:
         analyzer_factory=SpeechAnalyzer,
         feedback_factory=SpeechFeedbackGenerator,
         orchestrator: Optional[EvaluationOrchestrator] = None,
+        stt_type: str = "clova",
+        filler_from_vito: bool = True,
     ):
         self.stt_factory = stt_factory
         self.analyzer_factory = analyzer_factory
         self.feedback_factory = feedback_factory
         self._orchestrator = orchestrator  # None이면 싱글턴 사용
+        self.stt_type = stt_type
+        self.filler_from_vito = filler_from_vito
+
+    @classmethod
+    def for_real_interview(cls, **kwargs) -> "AnswerAnalysisPipeline":
+        """실전 면접용 — 로컬 GPU STT, Vito 없음"""
+        return cls(stt_type="sensevoice", filler_from_vito=False, **kwargs)
 
     async def convert_webm_to_wav(self, webm_path: str, wav_path: str) -> None:
         cmd = ["ffmpeg", "-i", webm_path, "-ar", "16000", "-ac", "1",
@@ -68,35 +87,47 @@ class AnswerAnalysisPipeline:
             raise AudioConversionError(stderr or "ffmpeg 변환 실패")
 
     async def transcribe(self, wav_path: str) -> tuple[str, dict]:
-        """주 STT(Clova) 실행 → (정리된 텍스트, 타임스탬프 포함 원본 응답)"""
-        clova = self.stt_factory("clova")
-        text, raw = await asyncio.to_thread(clova.transcribe, wav_path)
+        """주 STT 실행 → (정리된 텍스트, 타임스탬프 포함 원본 응답)
+
+        실전에서는 이 호출이 사용자를 기다리게 한다 — 꼬리질문이 이 텍스트를 받아야
+        다음 질문을 만든다. 준비 시간(10초) 안에 끝나야 한다.
+        """
+        stt = self.stt_factory(self.stt_type)
+        text, raw = await asyncio.to_thread(stt.transcribe, wav_path)
         return (text or "").strip(), raw
 
     async def analyze_and_evaluate(
         self,
         wav_path: str,
-        clova_raw: dict,
+        stt_raw: dict,
         text_clean: str,
         question_text: str,
         question_type: str,
     ) -> tuple[dict, Optional[dict]]:
-        """Vito STT·pitch 분석·LLM 평가를 병렬 실행.
+        """pitch 분석·LLM 평가(·필요하면 Vito STT)를 병렬 실행.
 
         Returns:
             (음성 피드백 dict, LLM 평가 dict 또는 실패 시 None)
         """
-        analyzer = self.analyzer_factory(clova_raw)
+        analyzer = self.analyzer_factory(stt_raw)
         speed = analyzer.speech_speed_calculate()
 
-        # 세 작업은 서로 독립 → 동시에 실행 (가장 느린 작업 시간만큼만 소요)
-        vito_text, pitch, evaluation = await asyncio.gather(
-            asyncio.to_thread(self._vito_transcribe_safe, wav_path),
+        # 서로 독립인 작업들 → 동시에 실행 (가장 느린 작업 시간만큼만 소요)
+        tasks = [
             asyncio.to_thread(analyzer.calculate_pitch_variation, wav_path),
             asyncio.to_thread(self._evaluate_safe, question_text, text_clean, question_type),
-        )
+        ]
+        if self.filler_from_vito:
+            tasks.append(asyncio.to_thread(self._vito_transcribe_safe, wav_path))
 
-        fillers = analyzer.find_filler_words(vito_text)
+        results = await asyncio.gather(*tasks)
+        pitch, evaluation = results[0], results[1]
+
+        # Clova는 간투어를 지운다 → Vito 텍스트에서 센다.
+        # SenseVoice는 간투어를 남긴다 → 그 텍스트에서 바로 센다.
+        filler_source = results[2] if self.filler_from_vito else text_clean
+        fillers = analyzer.find_filler_words(filler_source)
+
         feedback = self.feedback_factory(speed, pitch, fillers).generate_feedback()
         return feedback, evaluation
 
