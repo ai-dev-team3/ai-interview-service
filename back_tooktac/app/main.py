@@ -25,6 +25,7 @@ from app.api import signup_router
 from app.api import user_router
 from app.api import resume_router
 from app.api import interview_router
+from app.api import real_interview_router
 from app.api import result_router
 from app.api import report_router
 from app.api import training_page_router
@@ -97,6 +98,7 @@ app.include_router(signup_router)
 app.include_router(user_router)
 app.include_router(resume_router)
 app.include_router(interview_router)
+app.include_router(real_interview_router)
 app.include_router(result_router)
 app.include_router(report_router)
 app.include_router(training_page_router)

@@ -1,7 +1,13 @@
 """면접 구성(질문 유형·개수 제한·단계 이름)의 단일 소스.
 
-질문은 이력서 등록 시 한 번에 생성되어 이력서 질문 풀에 저장되고,
-사용자가 그중 일부를 골라 순서대로 답변한다. 꼬리물기 질문은 없다.
+연습 면접(practice):
+  이력서 등록 시 생성된 질문 풀에서 사용자가 골라 순서대로 답변한다.
+  꼬리질문 없음. 문항마다 결과를 본다.
+
+실전 면접(real):
+  서버가 풀에서 질문을 자동으로 고른다(사용자는 미리 못 본다).
+  답변마다 꼬리질문이 붙을 수 있고, 그만큼 남은 기본 질문이 밀려난다.
+  총 문항 수는 어느 쪽이든 MAX_INTERVIEW_QUESTIONS 를 넘지 않는다.
 """
 
 # 채점 가중치(score/scoring.py)와 LLM 평가 프롬프트(text/calculator.py)가
@@ -19,5 +25,13 @@ DEFAULT_QUESTION_TYPE = "행동형"
 MIN_GENERATED_QUESTIONS = 1
 MAX_GENERATED_QUESTIONS = 10
 
-# 한 번의 연습 면접에서 답변할 수 있는 질문 수 (기본 질문 포함)
+# 한 번의 면접에서 답변할 수 있는 질문 수 (기본 질문·꼬리질문 포함)
 MAX_INTERVIEW_QUESTIONS = 7
+
+# 면접 모드
+MODE_PRACTICE = "practice"
+MODE_REAL = "real"
+
+# 실전 면접의 문항별 시간 (초). 7문항 x 100초 = 약 12분.
+REAL_PREPARE_SECONDS = 10
+REAL_ANSWER_SECONDS = 90
