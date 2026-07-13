@@ -314,27 +314,27 @@ export default function FinalEvaluationPage() {
                     <span className="text-sm text-gray-600 w-24">모범답안 유사도</span>
                     <div className="flex items-center flex-1 justify-end">
                       <div className="w-24 bg-gray-200 rounded-full h-2 mr-3">
-                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.text.similarity * 10}%`}}></div>
+                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.text.similarity}%`}}></div>
                       </div>
-                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.text.similarity * 10}%</span>
+                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.text.similarity}%</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600 w-24">지식 정확도</span>
                     <div className="flex items-center flex-1 justify-end">
                       <div className="w-24 bg-gray-200 rounded-full h-2 mr-3">
-                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.text.accuracy * 10}%`}}></div>
+                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.text.accuracy}%`}}></div>
                       </div>
-                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.text.accuracy * 10}%</span>
+                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.text.accuracy}%</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600 w-24">질문의도 파악</span>
                     <div className="flex items-center flex-1 justify-end">
                       <div className="w-24 bg-gray-200 rounded-full h-2 mr-3">
-                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.text.understanding * 10}%`}}></div>
+                        <div className="bg-[#6ce5e8] h-2 rounded-full" style={{width: `${evaluationData.areaScores.text.understanding}%`}}></div>
                       </div>
-                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.text.understanding * 10}%</span>
+                      <span className="text-sm font-medium w-12 text-right">{evaluationData.areaScores.text.understanding}%</span>
                     </div>
                   </div>
                 </div>
