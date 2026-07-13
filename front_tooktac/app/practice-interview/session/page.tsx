@@ -9,6 +9,7 @@ import {
     submitRealAnswer,
 } from '@/api/api';
 import { useAnswerRecorder } from '@/hooks/useAnswerRecorder';
+import { ENDING_HINT_RATIO, type EndReason } from '@/lib/answerEnd';
 import { useExpressionSocket } from '@/hooks/useExpressionSocket';
 import { usePostureBenchmark } from '@/hooks/usePostureBenchmark';
 import { useWebcamPreview } from '@/hooks/useWebcamPreview';
@@ -70,17 +71,13 @@ export default function RealInterviewSessionPage() {
         return () => window.removeEventListener('beforeunload', warn);
     }, []);
 
-    // 준비 -> 답변 -> (녹음 종료) 카운트다운
+    // 준비 시간 카운트다운. 답변 시간은 녹음 훅이 관리한다 —
+    // 말이 끝나면 90초를 다 채우지 않고 끝나기 때문이다.
     useEffect(() => {
-        if (!start || phase === 'sending') return;
+        if (!start || phase !== 'prepare') return;
 
         if (seconds <= 0) {
-            if (phase === 'prepare') {
-                setPhase('answer');
-                setSeconds(start.answer_seconds);
-            } else {
-                setPhase('sending'); // 녹음 훅이 멈추고 blob을 넘긴다
-            }
+            setPhase('answer');
             return;
         }
 
@@ -89,8 +86,11 @@ export default function RealInterviewSessionPage() {
     }, [seconds, phase, start]);
 
     const handleRecorded = useCallback(
-        async (audio: Blob) => {
+        async (audio: Blob, reason: EndReason) => {
             if (!start || !question) return;
+            setPhase('sending');
+            console.info(`[answer] 답변 종료 (${reason}) — 전송`);
+
             try {
                 const result = await submitRealAnswer(
                     start.session_id,
@@ -115,19 +115,25 @@ export default function RealInterviewSessionPage() {
         [start, question, router],
     );
 
-    useAnswerRecorder({
+    const { ending, remainingSec } = useAnswerRecorder({
         active: phase === 'answer',
         questionOrder: question?.question_order ?? 0,
-        maxMs: (start?.answer_seconds ?? 90) * 1000,
         onComplete: handleRecorded,
     });
 
-    // 비디오 엘리먼트는 항상 렌더한다.
-    // 로딩 중이라고 화면을 통째로 갈아끼우면 #webcam-video 가 DOM 에 없는 렌더가 생기고,
-    // useWebcamPreview 는 마운트 시점에 그 엘리먼트를 한 번만 찾으므로 웹캠이 영영 안 붙는다.
-    const label =
-        phase === 'prepare' ? '준비' : phase === 'answer' ? '답변 중' : '전송 중';
+    // 아무 예고 없이 화면이 넘어가면 "잘렸다"고 느낀다. 침묵이 쌓이기 시작하면 알린다.
+    const isEnding = phase === 'answer' && ending >= ENDING_HINT_RATIO;
 
+    const label = isEnding
+        ? '답변을 마치는 중'
+        : phase === 'prepare'
+          ? '준비'
+          : phase === 'answer'
+            ? '답변 중'
+            : '전송 중';
+
+    // 비디오 엘리먼트는 항상 렌더한다. 로딩 중이라고 화면을 통째로 갈아끼우면
+    // #webcam-video 가 DOM 에 없는 렌더가 생기고, 그러면 웹캠이 영영 안 붙는다.
     return (
         <div className="min-h-screen bg-[#e7f8ff] p-6">
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-[calc(100vh-48px)]">
@@ -171,9 +177,28 @@ export default function RealInterviewSessionPage() {
 
                     <div className="bg-white rounded-xl shadow-lg p-6 w-[600px] text-center">
                         <div className="text-sm text-[#27386d]/70 mb-1">{label}</div>
+
                         <div className="text-4xl font-mono font-bold text-[#27386d]">
-                            {phase === 'sending' || !start ? '...' : `${seconds}초`}
+                            {phase === 'sending' || !start
+                                ? '...'
+                                : phase === 'answer'
+                                  ? `${remainingSec}초`
+                                  : `${seconds}초`}
                         </div>
+
+                        {isEnding && (
+                            <>
+                                <div className="mt-4 h-1.5 w-full bg-[#e7f8ff] rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-[#6ce5e8] transition-[width] duration-150"
+                                        style={{ width: `${Math.round(ending * 100)}%` }}
+                                    />
+                                </div>
+                                <div className="mt-2 text-xs text-[#27386d]/60">
+                                    말을 이어가면 계속 녹음됩니다
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
