@@ -115,3 +115,56 @@ def test_preprocess_input_type_mapping():
     assert out["evaluation_type"] == "situational"
     assert preprocess_input("q", "a", "기술형")["evaluation_type"] == "technical"
     assert preprocess_input("q", "a", "미지정")["evaluation_type"] == "technical"
+
+
+def test_분석이_유실된_문항이_있어도_리포트가_만들어진다(db_session, test_user):
+    """실전 면접은 분석이 백그라운드에서 돈다.
+
+    서버가 재시작하거나 분석이 유실되면 그 문항의 EvaluationResult 가 영영 안 생긴다.
+    그 한 문항 때문에 면접 전체의 리포트를 못 보게 되면 안 된다.
+    """
+    from app.repository.analysis import EvaluationResult, VideoEvaluationResult
+    from app.repository.interview import InterviewAnswer, InterviewQuestion, InterviewSession
+    from app.services.report.interview_data_formatter import generate_interview_json_from_session
+
+    session = InterviewSession(user_id=test_user.id, mode="real")
+    db_session.add(session)
+    db_session.flush()
+
+    # 1번: 정상 분석
+    q1 = InterviewQuestion(session_id=session.id, question_order=1,
+                           question_text="질문 1", question_type="기술형")
+    # 2번: 분석이 유실됨 (EvaluationResult / VideoEvaluationResult 없음)
+    q2 = InterviewQuestion(session_id=session.id, question_order=2,
+                           question_text="질문 2", question_type="기술형")
+    db_session.add_all([q1, q2])
+    db_session.flush()
+
+    db_session.add(InterviewAnswer(session_id=session.id, question_id=q1.id,
+                                   user_id=test_user.id, question_order=1, answer_text="답변 1"))
+    db_session.add(EvaluationResult(
+        user_id=test_user.id, session_id=session.id, question_id=q1.id, question_order=1,
+        similarity=0.8, intent_score=80, knowledge_score=80, final_text_score=80,
+        model_answer="모범", strengths="강점", improvements="개선", final_feedback="피드백",
+        speed_score=30, filler_score=30, pitch_score=15, final_speech_score=75,
+        speed_label="적절", fluency_label="양호", tone_label="적절",
+    ))
+    db_session.add(VideoEvaluationResult(
+        user_id=test_user.id, session_id=session.id, question_id=q1.id, question_order=1,
+        gaze_score=80, shoulder_warning=1, hand_warning=0,
+        posture_score=90, final_video_score=85,
+    ))
+    db_session.commit()
+
+    data = generate_interview_json_from_session(db_session, session.id)
+
+    analyses = data["question_analyses"]
+    assert len(analyses) == 2, "분석 안 된 문항이 통째로 빠지면 안 된다"
+
+    assert analyses[0]["analysis_failed"] is False
+    assert analyses[0]["user_answer"] == "답변 1"
+
+    assert analyses[1]["analysis_failed"] is True
+    assert analyses[1]["final_score"] == 0
+    assert analyses[1]["user_answer"] == ""
+    assert "완료되지 않았습니다" in analyses[1]["feedback"]
