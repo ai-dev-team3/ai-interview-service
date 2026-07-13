@@ -32,6 +32,19 @@ MAX_INTERVIEW_QUESTIONS = 7
 MODE_PRACTICE = "practice"
 MODE_REAL = "real"
 
-# 실전 면접의 문항별 시간 (초). 7문항 x 100초 = 약 12분.
+# --- 실전 면접 ---
+#
+# 문항 수가 아니라 시간이 기준이다. 짧게 답하면 문항이 늘고, 길게 답하면 준다.
+# 어느 쪽이든 12분 안팎에서 끝난다.
 REAL_PREPARE_SECONDS = 10
 REAL_ANSWER_SECONDS = 90
+
+# 답변이 끝난 시점의 경과가 이 시간을 넘으면 마무리 질문으로 간다.
+REAL_TIME_BUDGET_SECONDS = 10 * 60
+
+# 안전장치. 답변이 계속 무음으로 끝나면 시간이 안 흐르는 것처럼 보일 수 있다.
+REAL_MAX_QUESTIONS = 15
+
+# 마지막 질문. 채점하지 않으므로 질문 행으로 만들지 않는다 —
+# 전사만 interview_session.closing_remark 에 남긴다.
+CLOSING_QUESTION_TEXT = "마지막으로 하고 싶은 말씀 있으신가요?"

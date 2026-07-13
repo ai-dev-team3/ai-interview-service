@@ -71,11 +71,22 @@ def get_chat_model(
     max_tokens: Optional[int] = None,
     top_p: Optional[float] = None,
     top_k: Optional[int] = None,
+    schema: Optional[type] = None,
 ) -> Runnable:
     """우선 모델 + 폴백 모델로 구성된 Runnable을 반환.
 
     한쪽 API 키가 없으면 있는 쪽 단독으로 동작하고,
     둘 다 없으면 RuntimeError를 낸다.
+
+    schema 를 주면 그 모양으로만 응답하도록 모델에 강제한다(구조화 출력).
+    Gemini 는 responseSchema, OpenAI 는 json_schema strict 모드를 쓴다.
+
+    이건 프롬프트로 "JSON만 내보내세요"라고 부탁하는 것과 다르다. JsonOutputParser 는
+    파서일 뿐이라, LLM 이 앞에 한마디만 붙여도 파싱이 깨진다. 구조화 출력은 모델이
+    스키마를 벗어난 응답을 애초에 만들 수 없게 한다.
+
+    스키마는 폴백으로 묶기 '전에' 각 모델에 건다 —
+    RunnableWithFallbacks 에는 with_structured_output 이 없다.
     """
     gemini = _build_gemini(temperature, max_tokens, top_p, top_k)
     openai = _build_openai(temperature, max_tokens, top_p)  # top_k는 OpenAI 미지원
@@ -87,6 +98,10 @@ def get_chat_model(
         raise RuntimeError(
             "사용 가능한 LLM이 없습니다. GEMINI_API_KEY 또는 OPENAI_API_KEY를 설정하세요."
         )
+
+    if schema is not None:
+        available = [m.with_structured_output(schema) for m in available]
+
     if len(available) == 1:
         logger.warning("LLM 폴백 없이 단독 구성: %s", type(available[0]).__name__)
         return available[0]

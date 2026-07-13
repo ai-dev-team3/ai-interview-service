@@ -1,77 +1,59 @@
-"""실전 면접 API 테스트 — STT·LLM은 전부 페이크.
+"""실전 면접 API — STT·LLM 은 전부 페이크.
 
 고정하려는 성질:
-  - 서버가 질문을 정한다. 응답에 다음 질문이 하나만 담긴다(미리 다 주지 않는다).
-  - 꼬리질문이 붙으면 총 문항 수 안에서 기본 질문을 밀어낸다 (상한 7).
-  - 분석이 실패해도 결과 행은 남는다 — 안 그러면 마지막 대기 화면이 안 끝난다.
+  - 첫 질문은 자기소개로 고정이고 LLM 을 부르지 않는다 (시작이 즉시다).
+  - 질문은 이력서 풀이 아니라 매번 LLM 이 만든다. 지금까지의 대화가 프롬프트에 들어간다.
+  - 문항 수가 아니라 '시간'이 기준이다. 10분이 지나면 마무리 질문으로 간다.
+  - 마무리 답변은 채점하지 않는다 — 질문 행도 결과 행도 만들지 않고 전사만 남긴다.
+  - LLM 이 죽어도 면접은 멈추지 않는다 (마무리로 끝낸다).
 """
 import io
+from datetime import timedelta
 
 import pytest
 
 from app.repository.interview import InterviewQuestion, InterviewSession
-from app.repository.resume import Resume, ResumeQuestion
-from app.services.interview.followup import FollowUp
+from app.repository.resume import Resume
+from app.services.interview.next_question import NextQuestion
 from app.services.interview.plan import (
+    CLOSING_QUESTION_TEXT,
     DEFAULT_QUESTION_TEXT,
-    MAX_INTERVIEW_QUESTIONS,
     MODE_REAL,
+    REAL_TIME_BUDGET_SECONDS,
 )
+from app.utils.time_utils import utcnow_naive
 
 
 @pytest.fixture()
-def real_app(test_app, db_session):
-    from app.api.real_interview import router as real_router
-
-    test_app.include_router(real_router)
-    return test_app
-
-
-@pytest.fixture()
-def real_client(real_app, test_user):
+def real_client(test_app, test_user):
     from fastapi.testclient import TestClient
 
+    from app.api.real_interview import router as real_router
     from app.core.security import create_access_token
 
-    client = TestClient(real_app)
+    test_app.include_router(real_router)
+    client = TestClient(test_app)
     client.cookies.set("access_token", create_access_token(test_user.id))
     return client
 
 
 @pytest.fixture()
-def resume_pool(db_session, test_user):
-    """자기소개 + 풀 질문 8개 (상한 7보다 많게 두어 '고른다'를 확인한다)"""
-    resume = Resume(user_id=test_user.id, content="이력서 원문", structured={"skills": []})
-    db_session.add(resume)
-    db_session.flush()
-
-    db_session.add(ResumeQuestion(
-        resume_id=resume.id,
-        question_text=DEFAULT_QUESTION_TEXT,
-        question_type="행동형",
-        is_default=True,
-    ))
-    for i in range(8):
-        db_session.add(ResumeQuestion(
-            resume_id=resume.id,
-            question_text=f"풀 질문 {i}",
-            question_type="기술형",
-            is_default=False,
-        ))
+def resume(db_session, test_user):
+    r = Resume(user_id=test_user.id, content="이력서 원문", structured={"skills": ["Python"]})
+    db_session.add(r)
     db_session.commit()
-    return resume
+    return r
 
 
 @pytest.fixture(autouse=True)
-def fake_analysis(monkeypatch):
-    """STT/변환/평가를 전부 가짜로. 기본은 꼬리질문 없음."""
+def fake_pipeline(monkeypatch):
     from app.services.speech import answer_pipeline
 
     async def fake_convert(self, webm, wav):
         return None
 
     async def fake_transcribe(self, wav):
-        return "구체적인 사례를 들어 답변드리자면 결제 시스템을 만든 경험이 있습니다", {"segments": []}
+        return "구체적인 사례를 들자면 결제 시스템을 만든 경험이 있습니다", {"segments": []}
 
     async def fake_analyze(self, *args, **kwargs):
         return ({"labels": {}, "score_detail": {}, "total_score": 80}, {"final_score": 70})
@@ -80,46 +62,46 @@ def fake_analysis(monkeypatch):
     monkeypatch.setattr(answer_pipeline.AnswerAnalysisPipeline, "transcribe", fake_transcribe)
     monkeypatch.setattr(answer_pipeline.AnswerAnalysisPipeline, "analyze_and_evaluate", fake_analyze)
 
-    from app.services.interview.followup import FollowUpQuestionAgent
 
-    monkeypatch.setattr(FollowUpQuestionAgent, "generate", lambda self, q, a: None)
+def _agent_returns(monkeypatch, result):
+    from app.services.interview.next_question import NextQuestionAgent
 
+    calls = []
 
-def _no_followup(monkeypatch):
-    from app.services.interview.followup import FollowUpQuestionAgent
+    def fake(self, resume, history, remaining_seconds):
+        calls.append({"history": history, "remaining": remaining_seconds})
+        return result
 
-    monkeypatch.setattr(FollowUpQuestionAgent, "generate", lambda self, q, a: None)
-
-
-def _always_followup(monkeypatch):
-    from app.services.interview.followup import FollowUpQuestionAgent
-
-    monkeypatch.setattr(
-        FollowUpQuestionAgent,
-        "generate",
-        lambda self, q, a: FollowUp(question_text=f"[꼬리] {q}", question_type="기술형"),
-    )
+    monkeypatch.setattr(NextQuestionAgent, "generate", fake)
+    return calls
 
 
 def _answer(client, session_id, order):
     return client.post(
         "/real-interview/answer",
         params={"session_id": session_id, "question_order": order},
-        files={"audio": ("a.webm", io.BytesIO(b"fake-audio"), "audio/webm")},
+        files={"audio": ("a.webm", io.BytesIO(b"fake"), "audio/webm")},
     )
 
 
-def test_시작하면_첫_질문만_준다(real_client, resume_pool):
-    res = real_client.post("/real-interview/start")
+def _closing(client, session_id):
+    return client.post(
+        "/real-interview/closing",
+        params={"session_id": session_id},
+        files={"audio": ("c.webm", io.BytesIO(b"fake"), "audio/webm")},
+    )
 
-    assert res.status_code == 200
-    body = res.json()
+
+def test_첫_질문은_자기소개로_고정이다(real_client, resume, monkeypatch):
+    """LLM 을 부르지 않으므로 시작이 즉시다."""
+    calls = _agent_returns(monkeypatch, None)
+
+    body = real_client.post("/real-interview/start").json()
+
     assert body["question"]["question_order"] == 1
-    assert body["question"]["question_text"] == DEFAULT_QUESTION_TEXT  # 자기소개가 항상 1번
-    assert body["max_questions"] == MAX_INTERVIEW_QUESTIONS
-    assert body["prepare_seconds"] == 10
-    assert body["answer_seconds"] == 90
-    assert "questions" not in body, "질문 목록을 통째로 주면 실전이 아니다"
+    assert body["question"]["question_text"] == DEFAULT_QUESTION_TEXT
+    assert calls == [], "첫 질문에 LLM 을 불렀다"
+    assert "max_questions" not in body, "문항 수가 아니라 시간이 기준이다"
 
 
 def test_이력서가_없으면_시작할_수_없다(real_client):
@@ -129,76 +111,82 @@ def test_이력서가_없으면_시작할_수_없다(real_client):
     assert "이력서" in res.json()["detail"]
 
 
-def test_답변하면_다음_질문이_온다(real_client, resume_pool, db_session):
-    start = real_client.post("/real-interview/start").json()
+def test_다음_질문은_LLM이_만든다(real_client, resume, monkeypatch):
+    calls = _agent_returns(
+        monkeypatch,
+        NextQuestion(question_text="왜 그 선택을 했나요?", question_type="기술형", is_follow_up=True),
+    )
+    session_id = real_client.post("/real-interview/start").json()["session_id"]
 
-    res = _answer(real_client, start["session_id"], 1)
+    body = _answer(real_client, session_id, 1).json()
+
+    assert body["question"]["question_text"] == "왜 그 선택을 했나요?"
+    assert body["question"]["is_follow_up"] is True
+    assert body["closing"] is False
+
+    # 지금까지의 대화가 프롬프트로 들어가야 중복을 피할 수 있다
+    assert len(calls) == 1
+    history = calls[0]["history"]
+    assert history[0][0] == DEFAULT_QUESTION_TEXT
+    assert "결제 시스템" in history[0][1]
+
+
+def test_시간이_다_되면_마무리_질문으로_간다(real_client, resume, db_session, monkeypatch):
+    _agent_returns(
+        monkeypatch,
+        NextQuestion(question_text="다음 질문", question_type="기술형", is_follow_up=False),
+    )
+    session_id = real_client.post("/real-interview/start").json()["session_id"]
+
+    # 세션이 10분 전에 시작한 것으로 되돌린다
+    session = db_session.query(InterviewSession).filter_by(id=session_id).first()
+    session.started_at = utcnow_naive() - timedelta(seconds=REAL_TIME_BUDGET_SECONDS + 1)
+    db_session.commit()
+
+    body = _answer(real_client, session_id, 1).json()
+
+    assert body["closing"] is True
+    assert body["closing_question"] == CLOSING_QUESTION_TEXT
+    assert body["question"] is None
+
+
+def test_LLM이_죽어도_면접이_멈추지_않는다(real_client, resume, monkeypatch):
+    """질문을 못 만들면 마무리로 끝낸다. 예외를 던지면 면접이 멈춘다."""
+    _agent_returns(monkeypatch, None)
+    session_id = real_client.post("/real-interview/start").json()["session_id"]
+
+    res = _answer(real_client, session_id, 1)
 
     assert res.status_code == 200
-    body = res.json()
-    assert body["finished"] is False
-    assert body["question"]["question_order"] == 2
-    assert body["is_follow_up"] is False
-    assert body["transcript"]
+    assert res.json()["closing"] is True
 
 
-def test_꼬리질문이_붙으면_그_질문이_다음으로_온다(real_client, resume_pool, monkeypatch):
-    _always_followup(monkeypatch)
-    start = real_client.post("/real-interview/start").json()
+def test_마무리_답변은_채점하지_않는다(real_client, resume, db_session, monkeypatch):
+    """질문 행도 결과 행도 만들지 않는다. 전사만 세션에 남는다."""
+    from app.repository.analysis import EvaluationResult
 
-    body = _answer(real_client, start["session_id"], 1).json()
-
-    assert body["is_follow_up"] is True
-    assert body["question"]["question_text"].startswith("[꼬리]")
-    assert body["question"]["question_order"] == 2
-
-
-def test_총_7문항을_넘지_않는다(real_client, resume_pool, db_session, monkeypatch):
-    """풀에 9개(자기소개+8)가 있어도 7문항에서 끝나야 한다."""
-    _no_followup(monkeypatch)
+    _agent_returns(monkeypatch, None)
     session_id = real_client.post("/real-interview/start").json()["session_id"]
 
-    order = 1
-    while True:
-        body = _answer(real_client, session_id, order).json()
-        if body["finished"]:
-            break
-        order = body["question"]["question_order"]
-        assert order <= MAX_INTERVIEW_QUESTIONS
+    questions_before = db_session.query(InterviewQuestion).filter_by(session_id=session_id).count()
 
-    asked = db_session.query(InterviewQuestion).filter_by(session_id=session_id).count()
-    assert asked == MAX_INTERVIEW_QUESTIONS
+    res = _closing(real_client, session_id)
 
+    assert res.status_code == 200
+    assert "결제 시스템" in res.json()["transcript"]
 
-def test_꼬리질문도_문항_수에_포함된다(real_client, resume_pool, db_session, monkeypatch):
-    """꼬리질문이 매번 붙어도 총 7문항. 그만큼 기본 질문을 덜 묻는다."""
-    _always_followup(monkeypatch)
-    session_id = real_client.post("/real-interview/start").json()["session_id"]
+    db_session.expire_all()
+    session = db_session.query(InterviewSession).filter_by(id=session_id).first()
+    assert "결제 시스템" in session.closing_remark
 
-    order = 1
-    follow_ups = 0
-    while True:
-        body = _answer(real_client, session_id, order).json()
-        if body["finished"]:
-            break
-        if body["is_follow_up"]:
-            follow_ups += 1
-        order = body["question"]["question_order"]
+    questions_after = db_session.query(InterviewQuestion).filter_by(session_id=session_id).count()
+    assert questions_after == questions_before, "마무리 질문이 질문 행으로 저장됐다"
 
-    questions = (
-        db_session.query(InterviewQuestion)
-        .filter_by(session_id=session_id)
-        .order_by(InterviewQuestion.question_order)
-        .all()
-    )
-    assert len(questions) == MAX_INTERVIEW_QUESTIONS
-    assert follow_ups > 0
-    # 꼬리질문이 붙은 만큼 풀 질문은 덜 나왔다
-    pool_asked = sum(1 for q in questions if not q.question_text.startswith("[꼬리]"))
-    assert pool_asked == MAX_INTERVIEW_QUESTIONS - follow_ups
+    results = db_session.query(EvaluationResult).filter_by(session_id=session_id).count()
+    assert results == 0, "마무리 답변이 채점됐다"
 
 
-def test_남의_세션에는_답변할_수_없다(real_client, resume_pool, db_session):
+def test_남의_세션에는_답변할_수_없다(real_client, resume, db_session):
     from datetime import date
 
     from app.repository.user import User
@@ -214,12 +202,11 @@ def test_남의_세션에는_답변할_수_없다(real_client, resume_pool, db_s
     db_session.add(other)
     db_session.commit()
 
-    res = _answer(real_client, other.id, 1)
+    assert _answer(real_client, other.id, 1).status_code == 404
+    assert _closing(real_client, other.id).status_code == 404
 
-    assert res.status_code == 404
 
-
-def test_연습_세션은_실전_API로_접근할_수_없다(real_client, resume_pool, db_session, test_user):
+def test_연습_세션은_실전_API로_접근할_수_없다(real_client, resume, db_session, test_user):
     practice = InterviewSession(user_id=test_user.id, mode="practice")
     db_session.add(practice)
     db_session.commit()
