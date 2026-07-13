@@ -10,6 +10,8 @@ finalize에서 유사도 계산과 최종 점수 산출을 수행한다.
 """
 from typing import Optional, TypedDict
 
+import asyncio
+
 from langgraph.graph import END, START, StateGraph
 
 from app.services.text.answer_generator import ModelAnswerGenerator
@@ -61,6 +63,7 @@ class EvaluationOrchestrator:
         self.answer_evaluator = answer_evaluator or AnswerEvaluator()
         self.score_calculator = score_calculator or FinalScoreCalculator()
         self.graph = self._build_graph()
+        self.async_graph = self._build_async_graph()
 
     def _build_graph(self):
         builder = StateGraph(EvaluationState)
@@ -74,6 +77,45 @@ class EvaluationOrchestrator:
         builder.add_edge(["generate_model_answer", "evaluate_answer"], "finalize")
         builder.add_edge("finalize", END)
         return builder.compile()
+
+    def _build_async_graph(self):
+        """같은 그래프의 비동기 판.
+
+        LLM 두 호출은 네트워크 대기(약 17초)라 CPU를 쓰지 않는다. 동기로 두면
+        그 17초 동안 스레드 하나를 붙잡고 논다. 실전 면접에서는 그 스레드를
+        사용자를 기다리게 하는 STT가 써야 한다.
+        """
+        builder = StateGraph(EvaluationState)
+        builder.add_node("generate_model_answer", self._agenerate_model_answer)
+        builder.add_node("evaluate_answer", self._aevaluate_answer)
+        builder.add_node("finalize", self._afinalize)
+
+        builder.add_edge(START, "generate_model_answer")
+        builder.add_edge(START, "evaluate_answer")
+        builder.add_edge(["generate_model_answer", "evaluate_answer"], "finalize")
+        builder.add_edge("finalize", END)
+        return builder.compile()
+
+    async def _agenerate_model_answer(self, state: EvaluationState) -> dict:
+        model_answer = await self.model_answer_generator.agenerate(
+            state["question"], state["user_answer"], state["evaluation_type"],
+        )
+        return {"model_answer": model_answer}
+
+    async def _aevaluate_answer(self, state: EvaluationState) -> dict:
+        evaluation = await self.answer_evaluator.aevaluate(
+            state["question"], state["user_answer"], state["evaluation_type"],
+        )
+        return {"evaluation": evaluation}
+
+    async def _afinalize(self, state: EvaluationState) -> dict:
+        # 임베딩 유사도는 순수 CPU다(약 3 CPU-초). 이벤트 루프에서 돌리면 서버가 멈춘다.
+        similarity = await asyncio.to_thread(
+            self.similarity_scorer.calculate_similarity,
+            state["user_answer"],
+            state["model_answer"],
+        )
+        return self._score_from(state, similarity)
 
     def _generate_model_answer(self, state: EvaluationState) -> dict:
         model_answer = self.model_answer_generator.generate(
@@ -96,6 +138,9 @@ class EvaluationOrchestrator:
             state["user_answer"],
             state["model_answer"],
         )
+        return self._score_from(state, similarity)
+
+    def _score_from(self, state: EvaluationState, similarity: float) -> dict:
         scores = {
             "similarity_score": similarity,
             "intent_score": state["evaluation"]["intent_score"],
@@ -106,10 +151,19 @@ class EvaluationOrchestrator:
         )
         return {"similarity": similarity, "final_score": final_score}
 
+    async def aevaluate_answer(self, question: str, user_answer: str, question_type: str) -> dict:
+        """비동기 평가. LLM 대기 동안 스레드를 붙잡지 않는다."""
+        processed_input = preprocess_input(question, user_answer, question_type)
+        state = await self.async_graph.ainvoke(processed_input)
+        return self._format(processed_input, state)
+
     def evaluate_answer(self, question: str, user_answer: str, question_type: str) -> dict:
         processed_input = preprocess_input(question, user_answer, question_type)
         state = self.graph.invoke(processed_input)
+        return self._format(processed_input, state)
 
+    @staticmethod
+    def _format(processed_input: dict, state: dict) -> dict:
         evaluation_result = state["evaluation"]
         return {
             "question": processed_input["question"],

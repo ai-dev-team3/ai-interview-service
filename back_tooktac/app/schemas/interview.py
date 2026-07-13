@@ -21,3 +21,34 @@ class InterviewStartResponse(BaseModel):
     session_id: int
     total_questions: int
     questions: list[InterviewQuestionOut] = []
+
+
+# --- 실전 면접 ---
+# 질문을 미리 다 내려주지 않는다. 사용자가 다음 질문을 알면 실전이 아니고,
+# 꼬리질문 때문에 애초에 다음 질문이 정해져 있지도 않다.
+
+
+class RealInterviewStartResponse(BaseModel):
+    session_id: int
+    max_questions: int          # 상한. 꼬리질문이 붙으면 기본 질문이 그만큼 줄어든다
+    prepare_seconds: int
+    answer_seconds: int
+    question: InterviewQuestionOut   # 첫 질문 하나만
+
+
+class RealAnswerResponse(BaseModel):
+    """답변 접수 결과. 다음 질문을 바로 준다 (분석은 백그라운드에서 계속된다)."""
+
+    transcript: str
+    finished: bool
+    is_follow_up: bool = False
+    question: InterviewQuestionOut | None = None   # finished 면 None
+
+
+class AnalysisStatusResponse(BaseModel):
+    """마지막 대기 화면용 진행률."""
+
+    session_id: int
+    total: int
+    done: int
+    finished: bool

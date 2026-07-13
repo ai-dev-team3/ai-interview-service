@@ -14,6 +14,7 @@ _ROUTER_MODULES = {
     "user_router": ".user",
     "resume_router": ".resume",
     "interview_router": ".interview",
+    "real_interview_router": ".real_interview",
     "result_router": ".result",
     "report_router": ".report",
     "training_page_router": ".training_page",

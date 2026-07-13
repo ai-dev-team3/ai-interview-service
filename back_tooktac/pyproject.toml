@@ -29,6 +29,9 @@ dependencies = [
     "sentence-transformers>=5.0.0",
     "transformers>=4.54.1",
     "torch>=2.7.1",
+    # AI - STT (실전 면접의 SenseVoice 로컬 추론)
+    "funasr>=1.2.0",
+    "torchaudio>=2.7.1",
     # Audio
     "librosa>=0.11.0",
     "sounddevice>=0.5.2",
@@ -49,6 +52,22 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+# torch를 어디서 받을지 못 박는다.
+#
+# 리눅스의 PyPI torch 휠에는 CUDA가 들어 있다. 그래서 배포 서버와 CI는 그대로 두면 된다.
+# Windows의 PyPI 휠은 CPU 전용이다. 그냥 두면 SenseVoice가 CPU로 떨어져 STT가 수십 배
+# 느려지고, 꼬리질문이 준비 시간(10초) 예산을 넘긴다.
+#
+# 여기에 안 박아두면 uv run/uv sync가 실행할 때마다 CPU 휠로 되돌린다 — 실제로 겪었다.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'win32'" }]
+torchaudio = [{ index = "pytorch-cu128", marker = "sys_platform == 'win32'" }]
 
 [dependency-groups]
 dev = [

@@ -10,7 +10,7 @@ from fastapi import WebSocketDisconnect
 from sqlalchemy.orm import sessionmaker
 
 import app.api.audio as audio
-from app.api.audio import _save_result_if_missing
+from app.services.interview.result_store import save_result_if_missing as _save_result_if_missing
 from app.repository.analysis import EvaluationResult
 from app.repository.interview import InterviewQuestion, InterviewSession
 
@@ -42,7 +42,7 @@ def _full_result(user_id, session, question):
 def test_writes_minimal_result_when_none_exists(db_session, test_user):
     session, question = _seed(db_session, test_user.id)
 
-    _save_result_if_missing(db_session, test_user.id, session, question, reason="연결이 끊김")
+    _save_result_if_missing(db_session, test_user.id, session.id, question, reason="연결이 끊김")
 
     row = db_session.query(EvaluationResult).filter_by(question_id=question.id).one()
     # model_answer가 비어 있어야 /result/full이 status="failed"를 준다
@@ -57,7 +57,7 @@ def test_does_not_overwrite_existing_result(db_session, test_user):
     db_session.add(_full_result(test_user.id, session, question))
     db_session.commit()
 
-    _save_result_if_missing(db_session, test_user.id, session, question, reason="처리 오류")
+    _save_result_if_missing(db_session, test_user.id, session.id, question, reason="처리 오류")
 
     rows = db_session.query(EvaluationResult).filter_by(question_id=question.id).all()
     assert len(rows) == 1
@@ -68,7 +68,7 @@ def test_no_row_written_when_question_unknown(db_session, test_user):
     """질문을 특정하기 전에 실패했으면 남길 곳이 없다 — 조용히 넘어간다."""
     session, _ = _seed(db_session, test_user.id)
 
-    _save_result_if_missing(db_session, test_user.id, session, None, reason="세션 없음")
+    _save_result_if_missing(db_session, test_user.id, session.id, None, reason="세션 없음")
     _save_result_if_missing(db_session, test_user.id, None, None, reason="세션 없음")
     _save_result_if_missing(None, None, None, None, reason="DB 없음")
 
@@ -78,7 +78,7 @@ def test_no_row_written_when_question_unknown(db_session, test_user):
 def test_minimal_result_makes_full_result_report_failed(auth_client, db_session, test_user):
     """저장된 최소 행이 실제로 status=failed 로 읽히는지 — 폴러가 멈추는 조건."""
     session, question = _seed(db_session, test_user.id)
-    _save_result_if_missing(db_session, test_user.id, session, question, reason="연결이 끊김")
+    _save_result_if_missing(db_session, test_user.id, session.id, question, reason="연결이 끊김")
 
     body = auth_client.get("/result/full", params={"question_order": 1}).json()
     assert body["status"] == "failed"

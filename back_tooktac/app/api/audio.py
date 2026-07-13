@@ -1,6 +1,11 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from app.repository.interview import InterviewAnswer, InterviewQuestion
+from app.repository.interview import InterviewQuestion
+from app.services.interview.result_store import (
+    save_answer as _save_answer,
+    save_minimal_result as _save_minimal_result,
+    save_result_if_missing,
+)
 from app.services.interview.session_service import resolve_session
 from app.services.speech.answer_pipeline import (
     AnswerAnalysisPipeline,
@@ -163,12 +168,12 @@ async def websocket_endpoint(websocket: WebSocket):
         # code=1009는 메시지가 uvicorn의 --ws-max-size(기본 16MB)를 넘었다는 뜻이다.
         # 결과 행을 남기지 않으면 /result/full이 영원히 processing을 반환해 무한 로딩이 된다.
         logger.info("WebSocket disconnected (code=%s, reason=%r)", disconnect.code, disconnect.reason)
-        _save_result_if_missing(db, user_id, session, question, reason="연결이 끊김")
+        save_result_if_missing(db, user_id, session.id if session else None, question, reason="연결이 끊김")
     except Exception as e:
         logger.exception("음성 답변 처리 중 오류 발생")
         if db is not None:
             db.rollback()
-        _save_result_if_missing(db, user_id, session, question, reason=f"처리 오류({type(e).__name__})")
+        save_result_if_missing(db, user_id, session.id if session else None, question, reason=f"처리 오류({type(e).__name__})")
         try:
             await websocket.send_json({"error": f"internal_error: {type(e).__name__}"})
         except Exception:
@@ -182,81 +187,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     os.remove(p)
                 except Exception:
                     pass
-
-
-def _save_result_if_missing(db: Session | None, user_id, session, question, reason: str) -> None:
-    """분석이 끝나지 못했을 때 최소 결과라도 남긴다.
-
-    EvaluationResult 행이 없으면 /result/full이 계속 status="processing"을 반환하고,
-    프론트 폴러는 그것을 "아직 분석 중"으로 읽어 멈추지 않는다. 최소 행을 남기면
-    status="failed"가 되어 사용자에게 실패가 보인다.
-
-    이미 결과가 있으면(정상 저장 후 응답 단계에서 터진 경우 등) 덮어쓰지 않는다.
-    질문을 특정하기 전에 실패했다면 남길 곳이 없으므로 조용히 넘어간다.
-    """
-    if db is None or user_id is None or session is None or question is None:
-        return
-
-    try:
-        already_saved = (
-            db.query(EvaluationResult).filter_by(question_id=question.id).first() is not None
-        )
-        if already_saved:
-            return
-        _save_minimal_result(db, user_id, session.id, question, reason=reason)
-        logger.info("최소 결과 저장 (question_id=%s, reason=%s)", question.id, reason)
-    except Exception:
-        logger.exception("최소 결과 저장 실패 (question_id=%s)", question.id)
-        db.rollback()
-
-
-def _save_answer(db: Session, session_id: int, question, user_id: int, text: str) -> None:
-    ans = InterviewAnswer(
-        session_id=session_id,
-        question_id=question.id,
-        question_order=question.question_order,
-        user_id=user_id,
-        answer_text=text
-    )
-    db.add(ans)
-    db.commit()
-
-
-def _save_minimal_result(
-    db: Session,
-    user_id: int,
-    session_id: int,
-    question,
-    reason: str,
-    speech_scores: dict | None = None,
-    labels: dict | None = None,
-    total_speech: int | None = None
-) -> None:
-    speech_scores = speech_scores or {}
-    labels = labels or {}
-    er = EvaluationResult(
-        user_id=user_id,
-        session_id=session_id,
-        question_id=question.id,
-        question_order=question.question_order,
-        similarity=0.0,
-        intent_score=0.0,
-        knowledge_score=0.0,
-        final_text_score=0,
-        model_answer="",
-        strengths=f"{reason} - 강점 파악 불가",
-        improvements=f"{reason} - 개선점 파악 불가",
-        final_feedback=f"{reason}로 인해 텍스트 평가가 수행되지 않았습니다.",
-        speed_score=speech_scores.get("speed", 0),
-        filler_score=speech_scores.get("filler", 0),
-        pitch_score=speech_scores.get("pitch", 0),
-        final_speech_score=total_speech if total_speech is not None else 0,
-        speed_label=labels.get("speed", "없음"),
-        fluency_label=labels.get("fluency", "없음"),
-        tone_label=labels.get("tone", "없음"),
-    )
-    db.add(er)
-    db.commit()
 
 
 def _empty_feedback(msg: str) -> dict:

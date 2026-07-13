@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import QuestionClientLoadingPage from "@/today-interview/[questionId]/QuestionClientLoadingPage";
 import { useExpressionSocket } from "@/hooks/useExpressionSocket";
+import { usePostureBenchmark } from "@/hooks/usePostureBenchmark";
 import { useWebcamPreview } from "@/hooks/useWebcamPreview";
 
 function AnswerPageContent() {
@@ -22,6 +23,10 @@ function AnswerPageContent() {
   const [isHandActive, setHandActive] = useState(false);
 
   const router = useRouter();
+
+  // 아이스브레이킹 준비 시간(30초) 동안 클라이언트 추론 성능을 재서
+  // 면접 전체에 쓸 모드를 정한다. 소켓과 무관하게 로컬에서만 돈다.
+  usePostureBenchmark(true);
 
   useExpressionSocket({
     isAnswerActive,

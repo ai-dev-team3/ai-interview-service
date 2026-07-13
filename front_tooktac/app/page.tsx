@@ -104,7 +104,7 @@ export default function HomePage() {
               </button>
 
               <button
-                  //onClick={handlePracticeInterview}
+                  onClick={handlePracticeInterview}
                   className="group relative overflow-hidden bg-white rounded-3xl shadow-lg hover:shadow-xl transition-all duration-300 p-8 w-80 h-64 flex flex-col items-center justify-center text-center cursor-pointer hover:-translate-y-2"
               >
                 <div

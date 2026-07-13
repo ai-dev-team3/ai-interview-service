@@ -235,6 +235,68 @@ export const getSessionQuestions = async () => {
   return response.data;
 };
 
+// ---------- 실전 면접 ----------
+//
+// 연습과 달리 질문 목록을 미리 받지 않는다. 사용자가 다음 질문을 알면 실전이 아니고,
+// 꼬리질문 때문에 애초에 다음 질문이 정해져 있지도 않다. 한 번에 하나씩만 온다.
+// 그래서 sessionStorage에 질문 목록을 저장하지 않는다.
+
+export type RealInterviewStart = {
+  session_id: number;
+  max_questions: number;
+  prepare_seconds: number;
+  answer_seconds: number;
+  question: InterviewQuestion;
+};
+
+export type RealAnswerResult = {
+  transcript: string;
+  finished: boolean;
+  is_follow_up: boolean;
+  question: InterviewQuestion | null;
+};
+
+export type AnalysisStatus = {
+  session_id: number;
+  total: number;
+  done: number;
+  finished: boolean;
+};
+
+export const startRealInterview = async (): Promise<RealInterviewStart> => {
+  const response = await api.post('/real-interview/start');
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem(SESSION_KEY, String(response.data.session_id));
+  }
+  return response.data;
+};
+
+/**
+ * 답변 오디오를 올리고 다음 질문을 받는다.
+ * 서버는 STT와 꼬리질문 판단까지만 하고 응답한다(약 1~5초).
+ * 무거운 분석(LLM 평가)은 뒤에서 계속 돈다.
+ */
+export const submitRealAnswer = async (
+  sessionId: number,
+  questionOrder: number,
+  audio: Blob,
+): Promise<RealAnswerResult> => {
+  const form = new FormData();
+  form.append('audio', audio, 'answer.webm');
+
+  const response = await api.post('/real-interview/answer', form, {
+    params: { session_id: sessionId, question_order: questionOrder },
+  });
+  return response.data;
+};
+
+export const getRealAnalysisStatus = async (sessionId: number): Promise<AnalysisStatus> => {
+  const response = await api.get('/real-interview/analysis-status', {
+    params: { session_id: sessionId },
+  });
+  return response.data;
+};
+
 // export const fetchEvaluationResult = async (questionId: string) => {
 //   const response = await api.get(`/result/${questionId}`);
 //   return response.data; // { question, user_answer, final_score, ... }

@@ -25,6 +25,7 @@ from app.api import signup_router
 from app.api import user_router
 from app.api import resume_router
 from app.api import interview_router
+from app.api import real_interview_router
 from app.api import result_router
 from app.api import report_router
 from app.api import training_page_router
@@ -54,9 +55,22 @@ def _warm_up_embedding_models() -> None:
     logger.info("임베딩 모델 워밍업 완료 (%.1f초)", time.perf_counter() - started)
 
 
+def _warm_up_sensevoice() -> None:
+    """실전 면접의 STT 모델을 미리 올린다 (첫 실행이면 내려받기까지).
+
+    실전에서는 꼬리질문이 직전 답변의 STT를 기다린다. 첫 사용자가 모델 로딩(+다운로드)
+    까지 뒤집어쓰면 준비 시간 10초를 한참 넘긴다. GPU가 없으면 CPU로 떨어지므로
+    실패해도 서버는 뜬다.
+    """
+    from app.services.stt.sensevoice import warm_up
+
+    warm_up()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     threading.Thread(target=_warm_up_embedding_models, name="model-warmup", daemon=True).start()
+    threading.Thread(target=_warm_up_sensevoice, name="sensevoice-warmup", daemon=True).start()
     yield
 
 
@@ -85,6 +99,7 @@ app.include_router(signup_router)
 app.include_router(user_router)
 app.include_router(resume_router)
 app.include_router(interview_router)
+app.include_router(real_interview_router)
 app.include_router(result_router)
 app.include_router(report_router)
 app.include_router(training_page_router)

@@ -12,28 +12,41 @@ export function useWebcamPreview(active: boolean = true) {
     useEffect(() => {
         if (!active) return;
 
-        const video = document.getElementById('webcam-video') as HTMLVideoElement | null;
-        if (!video) return;
-
         let cancelled = false;
         let stream: MediaStream | null = null;
+        let video: HTMLVideoElement | null = null;
 
-        navigator.mediaDevices
-            .getUserMedia({ video: true, audio: false })
-            .then((s) => {
-                if (cancelled) {
-                    s.getTracks().forEach((track) => track.stop());
-                    return;
-                }
-                stream = s;
-                video.srcObject = s;
-            })
-            .catch((err) => console.error('웹캠 접근 실패:', err));
+        // 엘리먼트를 못 찾으면 조용히 포기하지 않는다. 페이지가 로딩 상태를 먼저
+        // 그리는 경우(데이터를 기다리는 동안) 마운트 시점에는 #webcam-video 가 아직
+        // 없다. 예전에는 여기서 그냥 return 해버려 웹캠이 영영 안 붙었다.
+        const attach = () => {
+            if (cancelled) return;
+
+            video = document.getElementById('webcam-video') as HTMLVideoElement | null;
+            if (!video) {
+                requestAnimationFrame(attach); // 다음 렌더에서 다시 찾는다
+                return;
+            }
+
+            navigator.mediaDevices
+                .getUserMedia({ video: true, audio: false })
+                .then((s) => {
+                    if (cancelled) {
+                        s.getTracks().forEach((track) => track.stop());
+                        return;
+                    }
+                    stream = s;
+                    video!.srcObject = s;
+                })
+                .catch((err) => console.error('웹캠 접근 실패:', err));
+        };
+
+        attach();
 
         return () => {
             cancelled = true;
             stream?.getTracks().forEach((track) => track.stop());
-            video.srcObject = null;
+            if (video) video.srcObject = null;
         };
     }, [active]);
 }

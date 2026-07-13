@@ -1,22 +1,38 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect  # 라우터/웹소켓 임포트
 import asyncio
-from sqlalchemy.orm import Session  # DB 세션 타입 힌트
-from app.services.vision.posture_analyzer import PostureAnalyzer, PostureCoreModel, PostureSessionState  # 포즈 분석기 구성요소
-from app.utils.auth_ws import get_user_id_from_websocket  # WebSocket에서 사용자 인증 정보 추출
-from app.repository.analysis import VideoEvaluationResult  # 결과 저장용 ORM 모델
-from app.repository.interview import InterviewQuestion  # 질문 ORM
-from app.services.interview.session_service import resolve_session  # 세션 결정 헬퍼
-from app.repository.database import get_db  # DB 세션 팩토리
-import numpy as np  # 바이트→배열 변환
-import cv2  # 이미지 디코딩
+import logging
 
-router = APIRouter()  # FastAPI 라우터 생성
+import cv2  # 폴백 경로의 JPEG 디코딩
+import numpy as np
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import Session
 
-# 무거운 모델은 프로세스당 1회 로드
-GLOBAL_POSTURE_CORE = PostureCoreModel()  # MediaPipe 코어 로드
+from app.repository.analysis import VideoEvaluationResult
+from app.repository.database import get_db
+from app.repository.interview import InterviewQuestion
+from app.services.interview.session_service import resolve_session
+from app.services.vision.payload import (
+    KIND_JPEG,
+    KIND_LANDMARKS,
+    PayloadError,
+    parse_landmarks,
+    payload_kind,
+)
+from app.services.vision.posture_analyzer import (
+    PostureCoreModel,
+    PostureSessionState,
+    to_feedback,
+)
+from app.services.vision.posture_rules import score_landmarks
+from app.utils.auth_ws import get_user_id_from_websocket
 
-# 얇은 Analyzer는 코어를 참조만 함(상태 없음)
-GLOBAL_POSTURE = PostureAnalyzer(GLOBAL_POSTURE_CORE)  # 포즈 분석기
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# 전역 MediaPipe 인스턴스는 두지 않는다.
+# MediaPipe의 solution 객체는 스레드 안전하지 않고 프레임 간 추적 상태를 갖는다.
+# 여러 연결이 공유하면 사용자끼리 결과가 섞인다. 폴백 연결만 자기 인스턴스를 만든다.
+
 
 def _save_video_result(
     db: Session,
@@ -34,6 +50,7 @@ def _save_video_result(
         return  # 세션 없으면 저장 스킵
 
     # 해당 세션의 question_order에 해당하는 질문 조회
+    # (아이스브레이킹은 question_order=0 이라 여기서 걸러진다 — 저장하지 않는다)
     question = (
         db.query(InterviewQuestion)
         .filter_by(session_id=session.id, question_order=question_order)
@@ -43,93 +60,118 @@ def _save_video_result(
         return  # 질문 없으면 저장 스킵
 
     video_result = VideoEvaluationResult(
-        user_id=user_id,  # 사용자 ID
-        session_id=session.id,  # 세션 ID
-        question_id=question.id,  # 질문 ID
-        question_order=question_order,  # 질문 순번
-        gaze_score=final_video["gaze_rate_score"],  # 정면 응시 점수
-        shoulder_warning=final_video["shoulder_posture_warning_count"],  # 어깨 경고 수
-        hand_warning=final_video["hand_posture_warning_count"],  # 손 경고 수
-        posture_score=final_video["shoulder_hand_score"],  # 어깨+손 합산 점수
-        final_video_score=final_video["video_score"]  # 최종 비디오 점수
+        user_id=user_id,
+        session_id=session.id,
+        question_id=question.id,
+        question_order=question_order,
+        gaze_score=final_video["gaze_rate_score"],
+        shoulder_warning=final_video["shoulder_posture_warning_count"],
+        hand_warning=final_video["hand_posture_warning_count"],
+        posture_score=final_video["shoulder_hand_score"],
+        final_video_score=final_video["video_score"],
     )
-    db.add(video_result)  # DB 세션에 추가
-    db.commit()  # 커밋으로 저장
+    db.add(video_result)
+    db.commit()
+
+
+def _analyze_jpeg(core: PostureCoreModel, jpeg: bytes):
+    """폴백 경로: 서버가 프레임에서 랜드마크를 뽑아 판정한다."""
+    frame = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise PayloadError("JPEG 디코딩 실패")
+    return core.infer_once(frame)
 
 
 @router.websocket("/ws/expression")
 async def expression_socket(websocket: WebSocket):
-    await websocket.accept()  # 클라이언트 WebSocket 연결 수락
+    await websocket.accept()
 
-    analyzer = GLOBAL_POSTURE  # 전역 포즈 분석기 참조
-
-    # 질문 생명주기 동안만 유지되는 상태 객체 생성
-    posture_state = PostureSessionState()  # 포즈 누적 상태
+    posture_state = PostureSessionState()  # 이 질문 동안만 유지되는 누적 상태
+    core: PostureCoreModel | None = None  # 폴백 경로에서만 만든다
 
     # 인증/파라미터 파싱 전에 예외가 나도 except 블록에서 참조 가능하도록 선초기화
     user_id: int | None = None
     question_order: int | None = None
     explicit_session_id: int | None = None
+    frames = 0
+    landmark_frames = 0
+    jpeg_frames = 0
 
-    db: Session = next(get_db())  # DB 세션 획득
+    db: Session = next(get_db())
     try:
-        user_id = await get_user_id_from_websocket(websocket)  # 쿠키/JWT 등에서 사용자 ID 추출
+        user_id = await get_user_id_from_websocket(websocket)
 
-        # 쿼리 파라미터에서 question_order 추출
-        order_str = websocket.query_params.get("question_id")  # question_id 파라미터 가져오기
-        if not order_str or not order_str.isdigit():  # 유효성 검사
-            await websocket.send_json({"error": "question_order가 유효하지 않습니다."})  # 에러 반환
-            return  # 소켓 종료
+        order_str = websocket.query_params.get("question_id")
+        if not order_str or not order_str.isdigit():
+            await websocket.send_json({"error": "question_order가 유효하지 않습니다."})
+            return
 
-        question_order = int(order_str)  # 정수 변환
+        question_order = int(order_str)
 
-        # session_id가 명시되면 해당 세션에 저장 (없으면 최신 세션 폴백)
         sid_str = websocket.query_params.get("session_id")
         if sid_str and sid_str.isdigit():
             explicit_session_id = int(sid_str)
 
         while True:
-            data = await websocket.receive_bytes()  # 클라이언트가 전송한 바이너리 프레임 수신
-            np_arr = np.frombuffer(data, np.uint8)  # 바이트를 NumPy 배열로 변환
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)  # JPEG/PNG 바이트를 BGR 이미지로 디코딩
-            if frame is None:  # 디코딩 실패 검사
-                await websocket.send_json({"expression": "이미지 변환 실패"})  # 에러 전송
-                continue  # 다음 루프로 진행
+            data = await websocket.receive_bytes()
 
             try:
-                # MediaPipe 추론은 동기 CPU 연산 → 이벤트 루프가 멈추지 않도록 워커 스레드로 위임
-                result = await asyncio.to_thread(analyzer.analyze_frame, frame, posture_state)  # 포즈 분석 수행(상태 누적)
-            except Exception as e:
-                await websocket.send_json({"expression": "프레임 분석 실패"})  # 포즈 분석 에러 통지
-                continue  # 다음 프레임으로 진행
+                kind = payload_kind(data)
+                frames += 1
+                # 경로는 도중에 바뀔 수 있다(브라우저가 모델을 올리는 동안은 JPEG).
+                # 첫 프레임만 보고 판단하면 오해한다 — 종료 시 둘 다 센 값을 남긴다.
+                if kind == KIND_LANDMARKS:
+                    landmark_frames += 1
+                elif kind == KIND_JPEG:
+                    jpeg_frames += 1
 
-            # 프론트에 즉시 피드백 전송
-            await websocket.send_json({"expression": result})  # 프레임별 결과 전송
+                if kind == KIND_LANDMARKS:
+                    # 기본 경로: 브라우저가 이미 추론을 끝냈다. 판정만 한다(수 마이크로초).
+                    face, pose = parse_landmarks(data)
+                    step = score_landmarks(face, pose)
+                elif kind == KIND_JPEG:
+                    # 폴백 경로: 이 연결 전용 MediaPipe 인스턴스를 늦게 만든다.
+                    if core is None:
+                        core = PostureCoreModel()
+                        logger.info("폴백 경로 진입 — MediaPipe 인스턴스 생성 (user_id=%s)", user_id)
+                    # MediaPipe 추론은 동기 CPU 연산 → 이벤트 루프가 멈추지 않도록 워커 스레드로
+                    step = await asyncio.to_thread(_analyze_jpeg, core, data[1:])
+                else:
+                    raise PayloadError(f"알 수 없는 페이로드 종류: {kind}")
+            except PayloadError as e:
+                await websocket.send_json({"expression": f"프레임 분석 실패: {e}"})
+                continue
+            except Exception:
+                logger.exception("프레임 분석 실패")
+                await websocket.send_json({"expression": "프레임 분석 실패"})
+                continue
 
-            # 프레임/버퍼 참조 해제로 GC 유도
-            del frame, np_arr, data  # 메모리 회수에 도움
+            posture_state.update(step)
+            await websocket.send_json({"expression": to_feedback(step)})
 
     except WebSocketDisconnect:
+        logger.info(
+            "영상 소켓 종료 (question_order=%s, 프레임 %d개 = 랜드마크 %d + JPEG %d)",
+            question_order, frames, landmark_frames, jpeg_frames,
+        )
         # 연결 종료 시 이 질문의 최종 결과 저장 (인증/파라미터 확보 전이면 스킵)
         if user_id is not None and question_order is not None:
             _save_video_result(db, user_id, question_order, posture_state, explicit_session_id)
 
     except Exception:
-        # 예외 발생 시에도 현재까지 상태로 저장 시도 (인증 실패 등으로 미확보면 스킵)
+        logger.exception("영상 분석 중 오류")
         if user_id is not None and question_order is not None:
             _save_video_result(db, user_id, question_order, posture_state, explicit_session_id)
 
-        # 프론트에 오류 알림(가능하면 마지막으로 시도)
         try:
             await websocket.send_json({"expression": "분석 중 오류 발생"})
         except Exception:
             pass  # 소켓이 이미 닫힌 경우 무시
 
     finally:
-        # DB 세션 정리
+        if core is not None:
+            core.close()  # MediaPipe 그래프 해제 (약 57MB)
         try:
-            db.close()  # 세션 닫기
-        except:
-            pass  # 예외 무시
-
-
+            db.close()
+        except Exception:
+            pass
