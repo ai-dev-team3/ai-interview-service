@@ -5,7 +5,7 @@
  *   - 그 구간의 영상 결과는 저장되지 않는다(question_order=0 은 질문 행이 없다).
  *     따라서 벤치마크 프레임이 점수를 오염시키지 않는다.
  *   - 사용자가 이미 카메라 앞에 앉아 있어 실제 조명·얼굴로 잰다.
- *   - 6초(30프레임 × 200ms)가 90초 답변 시간 안에 묻힌다.
+ *   - 5초(워밍업 5 + 측정 20 = 25프레임 × 200ms)면 준비 시간(30초) 안에 여유롭게 끝난다.
  *
  * 결정은 면접 시작 전에 끝나고 sessionStorage 에 남는다.
  * 아이스브레이킹을 건너뛰거나 새로고침으로 값을 잃으면 서버 모드로 폴백한다.
@@ -15,14 +15,15 @@ export type PostureMode = 'client' | 'server';
 const MODE_KEY = 'posture_mode';
 
 export const WARMUP_FRAMES = 5;
-export const MIN_MEASURED_FRAMES = 30;
+/** 워밍업 5 + 측정 20 = 25프레임 × 200ms = 5초. */
+export const MIN_MEASURED_FRAMES = 20;
 /** 5fps 예산 200ms 의 60%. 40% 여유를 남긴다. */
 export const P95_THRESHOLD_MS = 120;
 
 export function percentile(values: number[], p: number): number {
     if (values.length === 0) return Infinity;
     const sorted = [...values].sort((a, b) => a - b);
-    // 최근접 순위법: 30개 표본의 p95 는 29번째(0-based 28)
+    // 최근접 순위법: 20개 표본의 p95 는 19번째(0-based 18)
     const rank = Math.ceil((p / 100) * sorted.length);
     return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))];
 }
