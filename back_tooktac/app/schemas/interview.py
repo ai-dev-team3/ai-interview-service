@@ -15,6 +15,8 @@ class InterviewQuestionOut(BaseModel):
     question_order: int
     question_text: str
     question_type: str
+    # 직전 답변을 파고든 질문인가 (실전 면접). 채점에는 영향이 없고 표시용이다.
+    is_follow_up: bool = False
 
 
 class InterviewStartResponse(BaseModel):
@@ -30,19 +32,27 @@ class InterviewStartResponse(BaseModel):
 
 class RealInterviewStartResponse(BaseModel):
     session_id: int
-    max_questions: int          # 상한. 꼬리질문이 붙으면 기본 질문이 그만큼 줄어든다
     prepare_seconds: int
     answer_seconds: int
-    question: InterviewQuestionOut   # 첫 질문 하나만
+    question: InterviewQuestionOut   # 첫 질문(자기소개) 하나만
 
 
 class RealAnswerResponse(BaseModel):
-    """답변 접수 결과. 다음 질문을 바로 준다 (분석은 백그라운드에서 계속된다)."""
+    """답변 접수 결과. 다음 질문을 바로 준다 (분석은 백그라운드에서 계속된다).
+
+    문항 수가 아니라 시간이 기준이다. 시간이 다 되면 closing=True 로 마무리 질문을
+    준다. 그 답변은 채점하지 않으므로 /real-interview/closing 으로 따로 올린다.
+    """
 
     transcript: str
-    finished: bool
+    closing: bool = False                          # 다음이 마무리 질문인가
+    closing_question: str | None = None
     is_follow_up: bool = False
-    question: InterviewQuestionOut | None = None   # finished 면 None
+    question: InterviewQuestionOut | None = None   # closing 이면 None
+
+
+class ClosingResponse(BaseModel):
+    transcript: str
 
 
 class AnalysisStatusResponse(BaseModel):

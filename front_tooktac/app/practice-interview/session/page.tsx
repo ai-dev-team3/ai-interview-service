@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     type InterviewQuestion,
     type RealInterviewStart,
+    submitClosingRemark,
     submitRealAnswer,
 } from '@/api/api';
 import { useAnswerRecorder } from '@/hooks/useAnswerRecorder';
@@ -29,6 +30,8 @@ export default function RealInterviewSessionPage() {
 
     const [start, setStart] = useState<RealInterviewStart | null>(null);
     const [question, setQuestion] = useState<InterviewQuestion | null>(null);
+    // 마무리 질문. 채점하지 않으므로 질문 행이 없다 — 텍스트만 온다.
+    const [closingQuestion, setClosingQuestion] = useState<string | null>(null);
     const [phase, setPhase] = useState<Phase>('prepare');
     const [seconds, setSeconds] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -87,18 +90,36 @@ export default function RealInterviewSessionPage() {
 
     const handleRecorded = useCallback(
         async (audio: Blob, reason: EndReason) => {
-            if (!start || !question) return;
+            if (!start) return;
             setPhase('sending');
             console.info(`[answer] 답변 종료 (${reason}) — 전송`);
 
             try {
+                // 마지막 한마디는 채점하지 않는다. 따로 올리고 면접을 끝낸다.
+                if (closingQuestion) {
+                    await submitClosingRemark(start.session_id, audio);
+                    leavingRef.current = true;
+                    router.push('/practice-interview/analyzing');
+                    return;
+                }
+
+                if (!question) return;
                 const result = await submitRealAnswer(
                     start.session_id,
                     question.question_order,
                     audio,
                 );
 
-                if (result.finished || !result.question) {
+                // 시간이 다 되면 마무리 질문이 온다. 질문 행은 없다.
+                if (result.closing && result.closing_question) {
+                    setClosingQuestion(result.closing_question);
+                    setQuestion(null);
+                    setPhase('prepare');
+                    setSeconds(start.prepare_seconds);
+                    return;
+                }
+
+                if (!result.question) {
                     leavingRef.current = true;
                     router.push('/practice-interview/analyzing');
                     return;
@@ -112,12 +133,12 @@ export default function RealInterviewSessionPage() {
                 setError('답변을 전송하지 못했습니다. 네트워크를 확인해주세요.');
             }
         },
-        [start, question, router],
+        [start, question, closingQuestion, router],
     );
 
     const { ending, remainingSec } = useAnswerRecorder({
         active: phase === 'answer',
-        questionOrder: question?.question_order ?? 0,
+        questionOrder: closingQuestion ? -1 : (question?.question_order ?? 0),
         onComplete: handleRecorded,
     });
 
@@ -138,10 +159,18 @@ export default function RealInterviewSessionPage() {
         <div className="min-h-screen bg-[#e7f8ff] p-6">
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-[calc(100vh-48px)]">
                 <div className="flex flex-col justify-center items-center text-center px-8">
-                    {question && start ? (
+                    {closingQuestion ? (
+                        <>
+                            <div className="text-sm text-[#27386d]/60 mb-6">마지막 질문</div>
+                            <h1 className="text-3xl font-bold text-[#27386d] leading-relaxed max-w-[520px]">
+                                {closingQuestion}
+                            </h1>
+                        </>
+                    ) : question && start ? (
                         <>
                             <div className="text-sm text-[#27386d]/60 mb-6">
-                                질문 {question.question_order} / 최대 {start.max_questions}
+                                질문 {question.question_order}
+                                {question.is_follow_up ? ' · 꼬리질문' : ''}
                             </div>
                             <h1 className="text-3xl font-bold text-[#27386d] leading-relaxed max-w-[520px]">
                                 {question.question_text}

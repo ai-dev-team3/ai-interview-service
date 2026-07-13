@@ -169,6 +169,8 @@ export type InterviewQuestion = {
   question_order: number;
   question_text: string;
   question_type: string;
+  /** 직전 답변을 파고든 질문인가 (실전 면접). 표시용이며 채점과 무관하다. */
+  is_follow_up?: boolean;
 };
 
 export const getInterviewSessionId = (): number | null => {
@@ -222,15 +224,19 @@ export const getSessionQuestions = async () => {
 
 export type RealInterviewStart = {
   session_id: number;
-  max_questions: number;
   prepare_seconds: number;
   answer_seconds: number;
   question: InterviewQuestion;
 };
 
+/**
+ * 문항 수가 아니라 시간이 기준이다. 시간이 다 되면 closing=true 로 마무리 질문이 온다.
+ * 마무리 답변은 채점하지 않으므로 submitClosingRemark 로 따로 올린다.
+ */
 export type RealAnswerResult = {
   transcript: string;
-  finished: boolean;
+  closing: boolean;
+  closing_question: string | null;
   is_follow_up: boolean;
   question: InterviewQuestion | null;
 };
@@ -267,6 +273,13 @@ export const submitRealAnswer = async (
     params: { session_id: sessionId, question_order: questionOrder },
   });
   return response.data;
+};
+
+/** 마지막 한마디. 채점하지 않고 전사만 남긴다. */
+export const submitClosingRemark = async (sessionId: number, audio: Blob): Promise<void> => {
+  const form = new FormData();
+  form.append('audio', audio, 'closing.webm');
+  await api.post('/real-interview/closing', form, { params: { session_id: sessionId } });
 };
 
 export const getRealAnalysisStatus = async (sessionId: number): Promise<AnalysisStatus> => {

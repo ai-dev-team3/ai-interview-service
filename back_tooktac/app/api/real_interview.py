@@ -31,14 +31,17 @@ from app.repository.database import SessionLocal, get_db
 from app.repository.interview import InterviewQuestion, InterviewSession
 from app.schemas.interview import (
     AnalysisStatusResponse,
+    ClosingResponse,
     InterviewQuestionOut,
     RealAnswerResponse,
     RealInterviewStartResponse,
 )
 from app.services.interview import real_interview
-from app.services.interview.followup import FollowUpQuestionAgent
+from app.services.interview.next_question import NextQuestionAgent
 from app.services.interview.plan import (
-    MAX_INTERVIEW_QUESTIONS,
+    CLOSING_QUESTION_TEXT,
+    DEFAULT_QUESTION_TEXT,
+    DEFAULT_QUESTION_TYPE,
     MODE_REAL,
     REAL_ANSWER_SECONDS,
     REAL_PREPARE_SECONDS,
@@ -72,34 +75,31 @@ def start_real_interview(
     db: Session = Depends(get_db),
     user_id=Depends(get_current_user),
 ):
-    """실전 면접을 시작하고 첫 질문만 돌려준다.
+    """실전 면접을 시작하고 첫 질문(자기소개)만 돌려준다.
 
-    질문은 서버가 이력서 풀에서 고른다. 다음 질문은 답변을 받은 뒤에야 정해진다
-    (꼬리질문이 붙을 수 있으므로).
+    첫 질문은 고정이므로 LLM 을 부르지 않는다 — 시작이 즉시다.
+    다음 질문부터는 이력서와 지금까지의 대화를 보고 매번 새로 만든다.
     """
     try:
-        pool = resume_service.ensure_questions(db, user_id)
+        # 질문 풀은 쓰지 않는다. 다만 이력서 구조화 결과는 있어야 질문을 만들 수 있다.
+        resume_service.ensure_structured(db, user_id)
     except resume_service.ResumeNotFoundError:
         raise HTTPException(status_code=400, detail="이력서를 먼저 등록해주세요.")
+    except resume_service.ResumeStructuringError:
+        raise HTTPException(status_code=400, detail="이력서를 분석하지 못했습니다. 다시 등록해주세요.")
 
     session = InterviewSession(user_id=user_id, mode=MODE_REAL)
     db.add(session)
     db.flush()
 
-    first = real_interview.next_pool_question(db, session.id, pool)
-    if first is None:
-        raise HTTPException(status_code=400, detail="면접에 쓸 질문이 없습니다.")
-
     question = real_interview.add_question(
-        db, session, first.question_text, first.question_type
+        db, session, DEFAULT_QUESTION_TEXT, DEFAULT_QUESTION_TYPE
     )
 
-    logger.info("실전 면접 시작 (user_id=%s, session_id=%s, 풀=%d개)",
-                user_id, session.id, len(pool))
+    logger.info("실전 면접 시작 (user_id=%s, session_id=%s)", user_id, session.id)
 
     return RealInterviewStartResponse(
         session_id=session.id,
-        max_questions=MAX_INTERVIEW_QUESTIONS,
         prepare_seconds=REAL_PREPARE_SECONDS,
         answer_seconds=REAL_ANSWER_SECONDS,
         question=InterviewQuestionOut.model_validate(question),
@@ -151,7 +151,15 @@ async def submit_answer(
         )
     )
 
-    return await _advance(db, session, user_id, transcript=text, question=question)
+    return await _advance(db, session, user_id, transcript=text)
+
+
+def _closing(transcript: str) -> RealAnswerResponse:
+    return RealAnswerResponse(
+        transcript=transcript,
+        closing=True,
+        closing_question=CLOSING_QUESTION_TEXT,
+    )
 
 
 async def _advance(
@@ -159,41 +167,70 @@ async def _advance(
     session: InterviewSession,
     user_id: int,
     transcript: str,
-    question: InterviewQuestion | None = None,
 ) -> RealAnswerResponse:
-    """다음 질문을 정한다. 꼬리질문이 먼저, 없으면 풀에서 하나."""
-    asked = len(real_interview.asked_questions(db, session.id))
-    if asked >= MAX_INTERVIEW_QUESTIONS:
-        return RealAnswerResponse(transcript=transcript, finished=True)
+    """다음 질문을 정한다.
 
-    # 1) 꼬리질문을 물을 가치가 있는가
-    if question is not None and transcript:
-        follow_up = await asyncio.to_thread(
-            FollowUpQuestionAgent().generate, question.question_text, transcript
-        )
-        if follow_up is not None:
-            created = real_interview.add_question(
-                db, session, follow_up.question_text, follow_up.question_type
-            )
-            return RealAnswerResponse(
-                transcript=transcript,
-                finished=False,
-                is_follow_up=True,
-                question=InterviewQuestionOut.model_validate(created),
-            )
+    문항 수가 아니라 시간이 기준이다. 시간이 다 됐으면 마무리 질문으로 간다.
+    아니면 LLM 한 번으로 다음 질문을 만든다 — 꼬리질문이냐 새 질문이냐까지 그 안에서
+    정해진다. 라우팅과 생성을 나누면 호출이 두 번이 되는데 그럴 예산이 없다.
+    """
+    if real_interview.should_close(db, session):
+        logger.info("시간이 다 됨 — 마무리 질문 (session_id=%s)", session.id)
+        return _closing(transcript)
 
-    # 2) 풀에서 다음 질문
-    pool = resume_service.ensure_questions(db, user_id)
-    nxt = real_interview.next_pool_question(db, session.id, pool)
+    resume = resume_service.ensure_structured(db, user_id)
+    history = real_interview.conversation(db, session.id)
+    remaining = real_interview.remaining_seconds(session)
+
+    nxt = await asyncio.to_thread(
+        NextQuestionAgent().generate, resume, history, remaining
+    )
     if nxt is None:
-        return RealAnswerResponse(transcript=transcript, finished=True)
+        # 질문을 못 만들면 면접을 멈추느니 마무리한다.
+        return _closing(transcript)
 
-    created = real_interview.add_question(db, session, nxt.question_text, nxt.question_type)
+    created = real_interview.add_question(
+        db, session, nxt.question_text, nxt.question_type, is_follow_up=nxt.is_follow_up
+    )
     return RealAnswerResponse(
         transcript=transcript,
-        finished=False,
+        is_follow_up=nxt.is_follow_up,
         question=InterviewQuestionOut.model_validate(created),
     )
+
+
+@router.post("/closing", response_model=ClosingResponse)
+async def submit_closing(
+    session_id: int = Query(...),
+    audio: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user_id=Depends(get_current_user),
+):
+    """마지막 한마디를 받는다.
+
+    이건 질문이 아니다 — 채점하지 않으므로 질문 행도 결과 행도 만들지 않는다.
+    전사만 세션에 남긴다. 그래서 백그라운드 분석도 돌지 않고, 면접이 더 빨리 끝난다.
+    """
+    session = _load_session(db, user_id, session_id)
+
+    data = await audio.read()
+    webm_path, wav_path = _temp_paths(data)
+    pipeline = AnswerAnalysisPipeline.for_real_interview()
+
+    text = ""
+    try:
+        await pipeline.convert_webm_to_wav(webm_path, wav_path)
+        text, _ = await pipeline.transcribe(wav_path)
+    except (FfmpegNotFoundError, AudioConversionError) as e:
+        logger.warning("마지막 한마디 처리 실패 — 비워둔다: %s", e)
+    finally:
+        _cleanup(webm_path, wav_path)
+
+    session.closing_remark = text
+    db.commit()
+
+    logger.info("면접 종료 (session_id=%s, 마지막 한마디 %d자)", session.id, len(text))
+    return ClosingResponse(transcript=text)
 
 
 async def _analyze_in_background(

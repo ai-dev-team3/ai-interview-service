@@ -196,5 +196,7 @@ def generate_interview_json_from_session(db: Session, session_id: int) -> dict:
             "interview_date": session.started_at.date().isoformat(),
             "interview_duration": 25  # 기본값 (옵션)
         },
+        # 실전 면접의 마지막 한마디. 채점하지 않으므로 question_analyses 에 넣지 않는다.
+        "closing_remark": session.closing_remark or "",
         "question_analyses": question_analyses
     }
