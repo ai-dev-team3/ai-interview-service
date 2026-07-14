@@ -15,8 +15,6 @@ def _serialize_cover_letter(cover_letter) -> dict:
         "company_name": cover_letter.company_name,
         "job_group_id": cover_letter.job_group_id,
         "title": cover_letter.title,
-        "question_text": cover_letter.question_text,
-        "answer_text": cover_letter.answer_text,
         "items": cover_letter_service.split_cover_letter_pairs(cover_letter),
         "created_at": cover_letter.created_at.isoformat() if cover_letter.created_at else None,
     }

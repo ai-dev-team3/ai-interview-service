@@ -2,7 +2,7 @@
 from datetime import date, datetime
 
 from app.core.password import hash_password, is_bcrypt_hash, verify_password
-from app.repository.career import CoverLetter, JobGroup
+from app.repository.career import CoverLetter, CoverLetterItem, JobGroup
 from app.repository.resume import Resume
 from app.repository.user import InterviewSchedule, User
 
@@ -85,8 +85,9 @@ def test_delete_account_removes_user_resume_cover_letter_and_schedule(auth_clien
                 user_id=user_id,
                 job_group_id=job_group.id,
                 title="삭제될 자소서",
-                question_text="질문",
-                answer_text="답변",
+                items=[
+                    CoverLetterItem(sort_order=1, question_text="질문", answer_text="답변"),
+                ],
             ),
             InterviewSchedule(
                 user_id=username,

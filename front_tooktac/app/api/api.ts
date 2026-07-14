@@ -140,8 +140,6 @@ export type CoverLetter = {
   company_name: string | null;
   job_group_id: number;
   title: string;
-  question_text: string | null;
-  answer_text: string | null;
   items: Array<{
     question_text: string;
     answer_text: string;

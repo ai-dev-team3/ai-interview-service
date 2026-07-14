@@ -630,8 +630,12 @@ export default function AccountPage() {
                     name="job_group_id"
                     value={coverLetterForm.job_group_id}
                     onChange={handleCoverLetterChange}
+                    disabled={jobGroups.length === 0}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8]"
                   >
+                    {jobGroups.length === 0 && (
+                      <option value="">직무군 정보를 불러오지 못했습니다</option>
+                    )}
                     {jobGroups.map(group => (
                       <option key={group.id} value={group.id}>
                         {group.name}
@@ -662,6 +666,12 @@ export default function AccountPage() {
                   />
                 </label>
               </div>
+
+              {jobGroups.length === 0 && (
+                <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  직무군 데이터가 아직 준비되지 않았습니다. 백엔드 마이그레이션을 최신 상태로 반영한 뒤 다시 시도해주세요.
+                </p>
+              )}
 
               <div className="space-y-4">
                 {coverLetterPairs.map((pair, index) => (
@@ -707,7 +717,7 @@ export default function AccountPage() {
               <div className="flex items-center justify-between gap-3">
                 <button
                   type="submit"
-                  disabled={coverLetterSaving}
+                  disabled={coverLetterSaving || jobGroups.length === 0}
                   className="px-5 py-2 rounded-full bg-[#27386d] text-white text-sm font-medium hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {coverLetterSaving

@@ -117,16 +117,47 @@ class CoverLetter(Base):
         nullable=False,
     )
     title = Column(String(100), nullable=False)
-    question_text = Column(Text, nullable=True)
-    answer_text = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
     user = relationship("User", back_populates="cover_letters")
     job_group = relationship("JobGroup", back_populates="cover_letters")
+    items = relationship(
+        "CoverLetterItem",
+        back_populates="cover_letter",
+        cascade="all, delete-orphan",
+        order_by="CoverLetterItem.sort_order",
+    )
 
     __table_args__ = (
         Index("fk_cover_letter_job_group", "job_group_id"),
         Index("fk_cover_letter_user", "user_id"),
+        {
+            "mysql_engine": "InnoDB",
+            "mysql_charset": "utf8mb4",
+            "mysql_collate": "utf8mb4_0900_ai_ci",
+        },
+    )
+
+
+class CoverLetterItem(Base):
+    __tablename__ = "cover_letter_item"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cover_letter_id = Column(
+        Integer,
+        ForeignKey("cover_letter.id", name="fk_cover_letter_item_cover_letter", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sort_order = Column(Integer, nullable=False, server_default=text("0"), default=0)
+    question_text = Column(Text, nullable=False)
+    answer_text = Column(Text, nullable=False)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+    cover_letter = relationship("CoverLetter", back_populates="items")
+
+    __table_args__ = (
+        Index("ix_cover_letter_item_cover_letter_sort", "cover_letter_id", "sort_order"),
         {
             "mysql_engine": "InnoDB",
             "mysql_charset": "utf8mb4",

@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.repository.career import CoverLetter, JobGroup
+from app.repository.career import CoverLetter, CoverLetterItem, JobGroup
 from app.repository.user import User
 
 
@@ -41,15 +41,14 @@ def test_create_cover_letter_saves_question_answer_pairs(auth_client, test_user,
     body = res.json()
     assert body["company_name"] == "Tooktac"
     assert body["title"] == "backend cover letter"
-    assert body["question_text"] == "question one|question two"
-    assert body["answer_text"] == "answer one|answer two with ｜ pipe"
     assert body["items"] == [
         {"question_text": "question one", "answer_text": "answer one"},
-        {"question_text": "question two", "answer_text": "answer two with ｜ pipe"},
+        {"question_text": "question two", "answer_text": "answer two with | pipe"},
     ]
 
     saved = db_session.query(CoverLetter).filter_by(user_id=test_user.id).one()
     assert saved.job_group_id == job_group.id
+    assert [item.answer_text for item in saved.items] == ["answer one", "answer two with | pipe"]
 
 
 def test_create_cover_letter_requires_complete_pairs(auth_client, db_session):
@@ -80,8 +79,9 @@ def test_update_cover_letter_replaces_question_answer_pairs(auth_client, test_us
         job_group_id=first_group.id,
         title="old title",
         company_name="Old",
-        question_text="old question",
-        answer_text="old answer",
+        items=[
+            CoverLetterItem(sort_order=1, question_text="old question", answer_text="old answer"),
+        ],
     )
     db_session.add(cover_letter)
     db_session.commit()
@@ -102,12 +102,12 @@ def test_update_cover_letter_replaces_question_answer_pairs(auth_client, test_us
     assert body["job_group_id"] == second_group.id
     assert body["company_name"] == "New"
     assert body["title"] == "new title"
-    assert body["question_text"] == "new question one|new question two"
-    assert body["answer_text"] == "new answer one|new answer two"
     assert body["items"] == [
         {"question_text": "new question one", "answer_text": "new answer one"},
         {"question_text": "new question two", "answer_text": "new answer two"},
     ]
+    db_session.refresh(cover_letter)
+    assert [item.question_text for item in cover_letter.items] == ["new question one", "new question two"]
 
 
 def test_cover_letters_are_scoped_to_current_user(auth_client, test_user, db_session):
@@ -127,15 +127,17 @@ def test_cover_letters_are_scoped_to_current_user(auth_client, test_user, db_ses
         user_id=test_user.id,
         job_group_id=job_group.id,
         title="own cover letter",
-        question_text="own question",
-        answer_text="own answer",
+        items=[
+            CoverLetterItem(sort_order=1, question_text="own question", answer_text="own answer"),
+        ],
     )
     other_letter = CoverLetter(
         user_id=other_user.id,
         job_group_id=job_group.id,
         title="other cover letter",
-        question_text="other question",
-        answer_text="other answer",
+        items=[
+            CoverLetterItem(sort_order=1, question_text="other question", answer_text="other answer"),
+        ],
     )
     db_session.add_all([own_letter, other_letter])
     db_session.commit()
@@ -181,8 +183,9 @@ def test_list_and_delete_cover_letters(auth_client, test_user, db_session):
         user_id=test_user.id,
         job_group_id=job_group.id,
         title="test cover letter",
-        question_text="question",
-        answer_text="answer",
+        items=[
+            CoverLetterItem(sort_order=1, question_text="question", answer_text="answer"),
+        ],
     )
     db_session.add(cover_letter)
     db_session.commit()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.repository.career import CoverLetter, JobGroup
+from app.repository.career import CoverLetter, CoverLetterItem, JobGroup
 
 
 class CoverLetterValidationError(Exception):
@@ -13,55 +13,45 @@ class CoverLetterNotFoundError(Exception):
     """Cover letter does not exist or is not owned by the user."""
 
 
-PAIR_DELIMITER = "|"
-ESCAPED_DELIMITER = "｜"
+def _clean_text(value: str | None) -> str:
+    return (value or "").strip()
 
 
-def _clean_part(value: str) -> str:
-    return (value or "").strip().replace(PAIR_DELIMITER, ESCAPED_DELIMITER)
-
-
-def _join_parts(values: list[str]) -> str:
-    return PAIR_DELIMITER.join(_clean_part(value) for value in values)
-
-
-def _split_parts(value: str | None) -> list[str]:
-    if not value:
-        return []
-    return [part.strip() for part in value.split(PAIR_DELIMITER)]
-
-
-def normalize_pairs(question_texts: list[str], answer_texts: list[str]) -> tuple[list[str], list[str]]:
+def normalize_pairs(question_texts: list[str], answer_texts: list[str]) -> list[dict[str, str]]:
     max_len = max(len(question_texts), len(answer_texts))
-    questions: list[str] = []
-    answers: list[str] = []
+    pairs: list[dict[str, str]] = []
 
     for index in range(max_len):
-        question = _clean_part(question_texts[index] if index < len(question_texts) else "")
-        answer = _clean_part(answer_texts[index] if index < len(answer_texts) else "")
+        question = _clean_text(question_texts[index] if index < len(question_texts) else "")
+        answer = _clean_text(answer_texts[index] if index < len(answer_texts) else "")
         if not question and not answer:
             continue
         if not question or not answer:
             raise CoverLetterValidationError("질문과 답변을 모두 입력해주세요.")
-        questions.append(question)
-        answers.append(answer)
+        pairs.append({"question_text": question, "answer_text": answer})
 
-    if not questions:
+    if not pairs:
         raise CoverLetterValidationError("자소서 질문과 답변을 1개 이상 입력해주세요.")
 
-    return questions, answers
+    return pairs
+
+
+def _build_items(pairs: list[dict[str, str]]) -> list[CoverLetterItem]:
+    return [
+        CoverLetterItem(
+            sort_order=index,
+            question_text=pair["question_text"],
+            answer_text=pair["answer_text"],
+        )
+        for index, pair in enumerate(pairs, start=1)
+    ]
 
 
 def split_cover_letter_pairs(cover_letter: CoverLetter) -> list[dict[str, str]]:
-    questions = _split_parts(cover_letter.question_text)
-    answers = _split_parts(cover_letter.answer_text)
-    pairs = []
-    for index in range(max(len(questions), len(answers))):
-        pairs.append({
-            "question_text": questions[index] if index < len(questions) else "",
-            "answer_text": answers[index] if index < len(answers) else "",
-        })
-    return pairs
+    return [
+        {"question_text": item.question_text, "answer_text": item.answer_text}
+        for item in cover_letter.items
+    ]
 
 
 def create_cover_letter(
@@ -78,17 +68,16 @@ def create_cover_letter(
     if not job_group:
         raise CoverLetterValidationError("존재하지 않는 직무군입니다.")
 
-    questions, answers = normalize_pairs(question_texts, answer_texts)
-    normalized_title = _clean_part(title or "")[:100] or "자기소개서"
-    normalized_company = _clean_part(company_name or "")[:100] or None
+    pairs = normalize_pairs(question_texts, answer_texts)
+    normalized_title = _clean_text(title)[:100] or "자기소개서"
+    normalized_company = _clean_text(company_name)[:100] or None
 
     cover_letter = CoverLetter(
         user_id=user_id,
         job_group_id=job_group_id,
         company_name=normalized_company,
         title=normalized_title,
-        question_text=_join_parts(questions),
-        answer_text=_join_parts(answers),
+        items=_build_items(pairs),
     )
     db.add(cover_letter)
     db.commit()
@@ -119,12 +108,11 @@ def update_cover_letter(
     if not job_group:
         raise CoverLetterValidationError("존재하지 않는 직무군입니다.")
 
-    questions, answers = normalize_pairs(question_texts, answer_texts)
+    pairs = normalize_pairs(question_texts, answer_texts)
     cover_letter.job_group_id = job_group_id
-    cover_letter.company_name = _clean_part(company_name or "")[:100] or None
-    cover_letter.title = _clean_part(title or "")[:100] or "자기소개서"
-    cover_letter.question_text = _join_parts(questions)
-    cover_letter.answer_text = _join_parts(answers)
+    cover_letter.company_name = _clean_text(company_name)[:100] or None
+    cover_letter.title = _clean_text(title)[:100] or "자기소개서"
+    cover_letter.items = _build_items(pairs)
 
     db.commit()
     db.refresh(cover_letter)
