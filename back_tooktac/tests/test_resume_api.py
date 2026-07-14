@@ -147,8 +147,8 @@ def test_resume_status_reflects_registration(auth_client, test_user, db_session)
 
     res = auth_client.get("/resume/status")
     assert res.json()["has_resume"] is True
-    assert res.json()["has_cover_letter"] is True
-    assert res.json()["ready_for_career_diagnosis"] is True
+    assert res.json()["has_cover_letter"] is False
+    assert res.json()["ready_for_career_diagnosis"] is False
 
 
 def test_list_questions_without_resume_returns_400(auth_client):

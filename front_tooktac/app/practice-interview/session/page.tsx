@@ -6,9 +6,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     type InterviewQuestion,
     type RealInterviewStart,
+    submitClosingRemark,
     submitRealAnswer,
 } from '@/api/api';
 import { useAnswerRecorder } from '@/hooks/useAnswerRecorder';
+import { ENDING_HINT_RATIO, type EndReason } from '@/lib/answerEnd';
 import { useExpressionSocket } from '@/hooks/useExpressionSocket';
 import { usePostureBenchmark } from '@/hooks/usePostureBenchmark';
 import { useWebcamPreview } from '@/hooks/useWebcamPreview';
@@ -28,6 +30,8 @@ export default function RealInterviewSessionPage() {
 
     const [start, setStart] = useState<RealInterviewStart | null>(null);
     const [question, setQuestion] = useState<InterviewQuestion | null>(null);
+    // 마무리 질문. 채점하지 않으므로 질문 행이 없다 — 텍스트만 온다.
+    const [closingQuestion, setClosingQuestion] = useState<string | null>(null);
     const [phase, setPhase] = useState<Phase>('prepare');
     const [seconds, setSeconds] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -70,17 +74,13 @@ export default function RealInterviewSessionPage() {
         return () => window.removeEventListener('beforeunload', warn);
     }, []);
 
-    // 준비 -> 답변 -> (녹음 종료) 카운트다운
+    // 준비 시간 카운트다운. 답변 시간은 녹음 훅이 관리한다 —
+    // 말이 끝나면 90초를 다 채우지 않고 끝나기 때문이다.
     useEffect(() => {
-        if (!start || phase === 'sending') return;
+        if (!start || phase !== 'prepare') return;
 
         if (seconds <= 0) {
-            if (phase === 'prepare') {
-                setPhase('answer');
-                setSeconds(start.answer_seconds);
-            } else {
-                setPhase('sending'); // 녹음 훅이 멈추고 blob을 넘긴다
-            }
+            setPhase('answer');
             return;
         }
 
@@ -89,16 +89,37 @@ export default function RealInterviewSessionPage() {
     }, [seconds, phase, start]);
 
     const handleRecorded = useCallback(
-        async (audio: Blob) => {
-            if (!start || !question) return;
+        async (audio: Blob, reason: EndReason) => {
+            if (!start) return;
+            setPhase('sending');
+            console.info(`[answer] 답변 종료 (${reason}) — 전송`);
+
             try {
+                // 마지막 한마디는 채점하지 않는다. 따로 올리고 면접을 끝낸다.
+                if (closingQuestion) {
+                    await submitClosingRemark(start.session_id, audio);
+                    leavingRef.current = true;
+                    router.push('/practice-interview/analyzing');
+                    return;
+                }
+
+                if (!question) return;
                 const result = await submitRealAnswer(
                     start.session_id,
                     question.question_order,
                     audio,
                 );
 
-                if (result.finished || !result.question) {
+                // 시간이 다 되면 마무리 질문이 온다. 질문 행은 없다.
+                if (result.closing && result.closing_question) {
+                    setClosingQuestion(result.closing_question);
+                    setQuestion(null);
+                    setPhase('prepare');
+                    setSeconds(start.prepare_seconds);
+                    return;
+                }
+
+                if (!result.question) {
                     leavingRef.current = true;
                     router.push('/practice-interview/analyzing');
                     return;
@@ -112,30 +133,44 @@ export default function RealInterviewSessionPage() {
                 setError('답변을 전송하지 못했습니다. 네트워크를 확인해주세요.');
             }
         },
-        [start, question, router],
+        [start, question, closingQuestion, router],
     );
 
-    useAnswerRecorder({
+    const { ending, remainingSec } = useAnswerRecorder({
         active: phase === 'answer',
-        questionOrder: question?.question_order ?? 0,
-        maxMs: (start?.answer_seconds ?? 90) * 1000,
+        questionOrder: closingQuestion ? -1 : (question?.question_order ?? 0),
         onComplete: handleRecorded,
     });
 
-    // 비디오 엘리먼트는 항상 렌더한다.
-    // 로딩 중이라고 화면을 통째로 갈아끼우면 #webcam-video 가 DOM 에 없는 렌더가 생기고,
-    // useWebcamPreview 는 마운트 시점에 그 엘리먼트를 한 번만 찾으므로 웹캠이 영영 안 붙는다.
-    const label =
-        phase === 'prepare' ? '준비' : phase === 'answer' ? '답변 중' : '전송 중';
+    // 아무 예고 없이 화면이 넘어가면 "잘렸다"고 느낀다. 침묵이 쌓이기 시작하면 알린다.
+    const isEnding = phase === 'answer' && ending >= ENDING_HINT_RATIO;
 
+    const label = isEnding
+        ? '답변을 마치는 중'
+        : phase === 'prepare'
+          ? '준비'
+          : phase === 'answer'
+            ? '답변 중'
+            : '전송 중';
+
+    // 비디오 엘리먼트는 항상 렌더한다. 로딩 중이라고 화면을 통째로 갈아끼우면
+    // #webcam-video 가 DOM 에 없는 렌더가 생기고, 그러면 웹캠이 영영 안 붙는다.
     return (
         <div className="min-h-screen bg-[#e7f8ff] p-6">
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-[calc(100vh-48px)]">
                 <div className="flex flex-col justify-center items-center text-center px-8">
-                    {question && start ? (
+                    {closingQuestion ? (
+                        <>
+                            <div className="text-sm text-[#27386d]/60 mb-6">마지막 질문</div>
+                            <h1 className="text-3xl font-bold text-[#27386d] leading-relaxed max-w-[520px]">
+                                {closingQuestion}
+                            </h1>
+                        </>
+                    ) : question && start ? (
                         <>
                             <div className="text-sm text-[#27386d]/60 mb-6">
-                                질문 {question.question_order} / 최대 {start.max_questions}
+                                질문 {question.question_order}
+                                {question.is_follow_up ? ' · 꼬리질문' : ''}
                             </div>
                             <h1 className="text-3xl font-bold text-[#27386d] leading-relaxed max-w-[520px]">
                                 {question.question_text}
@@ -171,9 +206,28 @@ export default function RealInterviewSessionPage() {
 
                     <div className="bg-white rounded-xl shadow-lg p-6 w-[600px] text-center">
                         <div className="text-sm text-[#27386d]/70 mb-1">{label}</div>
+
                         <div className="text-4xl font-mono font-bold text-[#27386d]">
-                            {phase === 'sending' || !start ? '...' : `${seconds}초`}
+                            {phase === 'sending' || !start
+                                ? '...'
+                                : phase === 'answer'
+                                  ? `${remainingSec}초`
+                                  : `${seconds}초`}
                         </div>
+
+                        {isEnding && (
+                            <>
+                                <div className="mt-4 h-1.5 w-full bg-[#e7f8ff] rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-[#6ce5e8] transition-[width] duration-150"
+                                        style={{ width: `${Math.round(ending * 100)}%` }}
+                                    />
+                                </div>
+                                <div className="mt-2 text-xs text-[#27386d]/60">
+                                    말을 이어가면 계속 녹음됩니다
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

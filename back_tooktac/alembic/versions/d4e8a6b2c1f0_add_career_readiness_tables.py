@@ -1,7 +1,7 @@
 """add career readiness tables
 
 Revision ID: d4e8a6b2c1f0
-Revises: c3f7a1d94e26
+Revises: d5b8e3a71c04
 Create Date: 2026-07-13 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "d4e8a6b2c1f0"
-down_revision: Union[str, Sequence[str], None] = "c3f7a1d94e26"
+down_revision: Union[str, Sequence[str], None] = "d5b8e3a71c04"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -22,7 +22,6 @@ JOB_GROUPS = [
     {"id": 2, "name": "마케팅/기획", "description": "콘텐츠, 서비스 기획, 마케팅 직무군", "is_active": True},
     {"id": 3, "name": "사무/행정", "description": "사무보조, 행정, 운영지원 직무군", "is_active": True},
 ]
-
 
 CRITERIA = [
     {
@@ -162,133 +161,276 @@ CRITERIA = [
     },
 ]
 
-
-ACTIONS = [
-    (1, 1, 1, "대표 프로젝트를 구체화하세요", "프로젝트 목적, 본인 역할, 사용 기술, 구현 기능, 문제 해결 경험, 결과를 6개 항목으로 정리하세요."),
-    (2, 1, 2, "기술스택 설명을 보완하세요", "사용한 기술을 단순 나열하지 말고, 왜 사용했는지와 어떤 기능에 적용했는지 함께 정리하세요."),
-    (3, 1, 3, "트러블슈팅 사례를 정리하세요", "오류 상황, 원인 분석, 해결 방법, 결과 순서로 최소 1개 이상의 문제 해결 경험을 작성하세요."),
-    (4, 1, 4, "GitHub README를 보완하세요", "프로젝트 소개, 실행 방법, 주요 기능, 기술스택, ERD, API 명세, 트러블슈팅 항목을 추가하세요."),
-    (5, 1, 5, "배포 경험을 구조화하세요", "실제 배포 경험이 있다면 배포 주소와 서버 구조를 정리하고, 없다면 배포 계획과 학습 내용을 정리하세요."),
-    (6, 2, 6, "콘텐츠 사례를 정리하세요", "제작한 콘텐츠의 목적, 대상, 제작 과정, 반응을 정리하세요."),
-    (7, 2, 7, "타깃 분석을 보완하세요", "콘텐츠나 기획의 대상 사용자가 누구였는지, 어떤 니즈를 고려했는지 작성하세요."),
-    (8, 2, 8, "성과 수치를 정리하세요", "조회수, 클릭률, 팔로워 증가, 참여율 등 가능한 지표를 수치로 정리하세요."),
-    (9, 2, 9, "사용한 툴과 활용 목적을 정리하세요", "Notion, Excel, GA4, Figma 등을 어떤 목적으로 사용했는지 구체화하세요."),
-    (10, 2, 10, "기획서를 포트폴리오화하세요", "기획 배경, 문제 정의, 실행 과정, 결과를 한 장짜리 요약 자료로 정리하세요."),
-    (11, 3, 11, "문서 작성 사례를 정리하세요", "회의록, 보고서, 정리 문서 등 본인이 작성한 문서 유형과 목적을 정리하세요."),
-    (12, 3, 12, "Excel 활용 사례를 구체화하세요", "사용해본 함수, 표 정리, 데이터 관리 경험을 구체적으로 작성하세요."),
-    (13, 3, 13, "일정 관리 경험을 정리하세요", "일정 조율, 마감 관리, 업무 분담 경험을 상황-역할-결과 순서로 정리하세요."),
-    (14, 3, 14, "협업 경험을 정리하세요", "팀원, 교수, 고객, 동료와의 소통 경험을 구체적으로 작성하세요."),
-    (15, 3, 15, "실수 방지 경험을 정리하세요", "자료 검토, 누락 확인, 반복 업무 처리 경험을 사례 중심으로 정리하세요."),
+ACTION_TEMPLATES = [
+    {
+        "id": 1,
+        "job_group_id": 1,
+        "criterion_id": 1,
+        "action_title": "대표 프로젝트를 구체화하세요",
+        "action_detail": "프로젝트 목적, 본인 역할, 사용 기술, 구현 기능, 문제 해결 경험, 결과를 6개 항목으로 정리하세요.",
+        "sort_order": 1,
+    },
+    {
+        "id": 2,
+        "job_group_id": 1,
+        "criterion_id": 2,
+        "action_title": "기술스택 설명을 보완하세요",
+        "action_detail": "사용한 기술을 단순 나열하지 말고, 왜 사용했는지와 어떤 기능에 적용했는지 함께 정리하세요.",
+        "sort_order": 2,
+    },
+    {
+        "id": 3,
+        "job_group_id": 1,
+        "criterion_id": 3,
+        "action_title": "트러블슈팅 사례를 정리하세요",
+        "action_detail": "오류 상황, 원인 분석, 해결 방법, 결과 순서로 최소 1개 이상의 문제 해결 경험을 작성하세요.",
+        "sort_order": 3,
+    },
+    {
+        "id": 4,
+        "job_group_id": 1,
+        "criterion_id": 4,
+        "action_title": "GitHub README를 보완하세요",
+        "action_detail": "프로젝트 소개, 실행 방법, 주요 기능, 기술스택, ERD, API 명세, 트러블슈팅 항목을 추가하세요.",
+        "sort_order": 4,
+    },
+    {
+        "id": 5,
+        "job_group_id": 1,
+        "criterion_id": 5,
+        "action_title": "배포 경험을 구조화하세요",
+        "action_detail": "실제 배포 경험이 있다면 배포 주소와 서버 구조를 정리하고, 없다면 배포 계획과 학습 내용을 정리하세요.",
+        "sort_order": 5,
+    },
+    {
+        "id": 6,
+        "job_group_id": 2,
+        "criterion_id": 6,
+        "action_title": "콘텐츠 사례를 정리하세요",
+        "action_detail": "제작한 콘텐츠의 목적, 대상, 제작 과정, 반응을 정리하세요.",
+        "sort_order": 6,
+    },
+    {
+        "id": 7,
+        "job_group_id": 2,
+        "criterion_id": 7,
+        "action_title": "타깃 분석을 보완하세요",
+        "action_detail": "콘텐츠나 기획의 대상 사용자가 누구였는지, 어떤 니즈를 고려했는지 작성하세요.",
+        "sort_order": 7,
+    },
+    {
+        "id": 8,
+        "job_group_id": 2,
+        "criterion_id": 8,
+        "action_title": "성과 수치를 정리하세요",
+        "action_detail": "조회수, 클릭률, 팔로워 증가, 참여율 등 가능한 지표를 수치로 정리하세요.",
+        "sort_order": 8,
+    },
+    {
+        "id": 9,
+        "job_group_id": 2,
+        "criterion_id": 9,
+        "action_title": "사용한 툴과 활용 목적을 정리하세요",
+        "action_detail": "Notion, Excel, GA4, Figma 등을 어떤 목적으로 사용했는지 구체화하세요.",
+        "sort_order": 9,
+    },
+    {
+        "id": 10,
+        "job_group_id": 2,
+        "criterion_id": 10,
+        "action_title": "기획서를 포트폴리오화하세요",
+        "action_detail": "기획 배경, 문제 정의, 실행 과정, 결과를 한 장짜리 요약 자료로 정리하세요.",
+        "sort_order": 10,
+    },
+    {
+        "id": 11,
+        "job_group_id": 3,
+        "criterion_id": 11,
+        "action_title": "문서 작성 사례를 정리하세요",
+        "action_detail": "회의록, 보고서, 정리 문서 등 본인이 작성한 문서 유형과 목적을 정리하세요.",
+        "sort_order": 11,
+    },
+    {
+        "id": 12,
+        "job_group_id": 3,
+        "criterion_id": 12,
+        "action_title": "Excel 활용 사례를 구체화하세요",
+        "action_detail": "사용해본 함수, 표 정리, 데이터 관리 경험을 구체적으로 작성하세요.",
+        "sort_order": 12,
+    },
+    {
+        "id": 13,
+        "job_group_id": 3,
+        "criterion_id": 13,
+        "action_title": "일정 관리 경험을 정리하세요",
+        "action_detail": "일정 조율, 마감 관리, 업무 분담 경험을 상황-역할-결과 순서로 정리하세요.",
+        "sort_order": 13,
+    },
+    {
+        "id": 14,
+        "job_group_id": 3,
+        "criterion_id": 14,
+        "action_title": "협업 경험을 정리하세요",
+        "action_detail": "팀원, 교수, 고객, 동료와의 소통 경험을 구체적으로 작성하세요.",
+        "sort_order": 14,
+    },
+    {
+        "id": 15,
+        "job_group_id": 3,
+        "criterion_id": 15,
+        "action_title": "실수 방지 경험을 정리하세요",
+        "action_detail": "자료 검토, 누락 확인, 반복 업무 처리 경험을 사례 중심으로 정리하세요.",
+        "sort_order": 15,
+    },
 ]
 
 
+def _has_table(table_name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
+def _is_empty(table_name: str) -> bool:
+    count = op.get_bind().execute(sa.text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+    return count == 0
+
+
 def upgrade() -> None:
-    op.create_table(
-        "job_group",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("name", sa.String(length=50), nullable=False),
-        sa.Column("description", sa.String(length=255), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("name"),
-    )
+    if not _has_table("job_group"):
+        op.create_table(
+            "job_group",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("name", sa.String(length=50), nullable=False),
+            sa.Column("description", sa.String(length=255), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index("name", "job_group", ["name"], unique=True)
 
-    op.create_table(
-        "job_readiness_criteria",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("job_group_id", sa.Integer(), nullable=False),
-        sa.Column("criterion_name", sa.String(length=100), nullable=False),
-        sa.Column("description", sa.String(length=255), nullable=False),
-        sa.Column("keywords", sa.JSON(), nullable=True),
-        sa.Column("weight", sa.Integer(), nullable=False),
-        sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.ForeignKeyConstraint(["job_group_id"], ["job_group.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(op.f("ix_job_readiness_criteria_job_group_id"), "job_readiness_criteria", ["job_group_id"])
+    if not _has_table("job_readiness_criteria"):
+        op.create_table(
+            "job_readiness_criteria",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("job_group_id", sa.Integer(), nullable=False),
+            sa.Column("criterion_name", sa.String(length=100), nullable=False),
+            sa.Column("description", sa.String(length=255), nullable=False),
+            sa.Column("keywords", sa.JSON(), nullable=True),
+            sa.Column("weight", sa.Integer(), nullable=False),
+            sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
+            sa.ForeignKeyConstraint(
+                ["job_group_id"],
+                ["job_group.id"],
+                name="job_readiness_criteria_ibfk_1",
+                ondelete="CASCADE",
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            op.f("ix_job_readiness_criteria_job_group_id"),
+            "job_readiness_criteria",
+            ["job_group_id"],
+        )
 
-    op.create_table(
-        "action_template",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("job_group_id", sa.Integer(), nullable=False),
-        sa.Column("criterion_id", sa.Integer(), nullable=False),
-        sa.Column("action_title", sa.String(length=100), nullable=False),
-        sa.Column("action_detail", sa.Text(), nullable=False),
-        sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.ForeignKeyConstraint(["criterion_id"], ["job_readiness_criteria.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["job_group_id"], ["job_group.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(op.f("ix_action_template_criterion_id"), "action_template", ["criterion_id"])
-    op.create_index(op.f("ix_action_template_job_group_id"), "action_template", ["job_group_id"])
+    if not _has_table("action_template"):
+        op.create_table(
+            "action_template",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("job_group_id", sa.Integer(), nullable=False),
+            sa.Column("criterion_id", sa.Integer(), nullable=False),
+            sa.Column("action_title", sa.String(length=100), nullable=False),
+            sa.Column("action_detail", sa.Text(), nullable=False),
+            sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
+            sa.ForeignKeyConstraint(
+                ["criterion_id"],
+                ["job_readiness_criteria.id"],
+                name="action_template_ibfk_1",
+                ondelete="CASCADE",
+            ),
+            sa.ForeignKeyConstraint(
+                ["job_group_id"],
+                ["job_group.id"],
+                name="action_template_ibfk_2",
+                ondelete="CASCADE",
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(op.f("ix_action_template_criterion_id"), "action_template", ["criterion_id"])
+        op.create_index(op.f("ix_action_template_job_group_id"), "action_template", ["job_group_id"])
 
-    op.create_table(
-        "career_diagnosis_result",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("resume_id", sa.Integer(), nullable=False),
-        sa.Column("job_group_id", sa.Integer(), nullable=False),
-        sa.Column("desired_job", sa.String(length=100), nullable=True),
-        sa.Column("total_score", sa.Integer(), nullable=False),
-        sa.Column("result_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(), nullable=True),
-        sa.ForeignKeyConstraint(["job_group_id"], ["job_group.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["resume_id"], ["resume.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(op.f("ix_career_diagnosis_result_job_group_id"), "career_diagnosis_result", ["job_group_id"])
-    op.create_index(op.f("ix_career_diagnosis_result_resume_id"), "career_diagnosis_result", ["resume_id"])
-    op.create_index(op.f("ix_career_diagnosis_result_user_id"), "career_diagnosis_result", ["user_id"])
+    if not _has_table("career_diagnosis_result"):
+        op.create_table(
+            "career_diagnosis_result",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("resume_id", sa.Integer(), nullable=False),
+            sa.Column("job_group_id", sa.Integer(), nullable=False),
+            sa.Column("desired_job", sa.String(length=100), nullable=True),
+            sa.Column("total_score", sa.Integer(), nullable=False),
+            sa.Column("result_json", sa.JSON(), nullable=False),
+            sa.Column("created_at", sa.TIMESTAMP(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+            sa.Column("user_id", sa.Integer(), nullable=False),
+            sa.ForeignKeyConstraint(
+                ["job_group_id"],
+                ["job_group.id"],
+                name="fk_career_result_job_group",
+                ondelete="CASCADE",
+                onupdate="CASCADE",
+            ),
+            sa.ForeignKeyConstraint(
+                ["resume_id"],
+                ["resume.id"],
+                name="fk_career_result_resume",
+                ondelete="CASCADE",
+                onupdate="CASCADE",
+            ),
+            sa.ForeignKeyConstraint(
+                ["user_id"],
+                ["user.id"],
+                name="fk_career_result_user_id",
+                ondelete="CASCADE",
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
 
     job_group_table = sa.table(
         "job_group",
-        sa.column("id", sa.Integer),
-        sa.column("name", sa.String),
-        sa.column("description", sa.String),
-        sa.column("is_active", sa.Boolean),
+        sa.column("id", sa.Integer()),
+        sa.column("name", sa.String()),
+        sa.column("description", sa.String()),
+        sa.column("is_active", sa.Boolean()),
     )
     criteria_table = sa.table(
         "job_readiness_criteria",
-        sa.column("id", sa.Integer),
-        sa.column("job_group_id", sa.Integer),
-        sa.column("criterion_name", sa.String),
-        sa.column("description", sa.String),
-        sa.column("keywords", sa.JSON),
-        sa.column("weight", sa.Integer),
-        sa.column("sort_order", sa.Integer),
+        sa.column("id", sa.Integer()),
+        sa.column("job_group_id", sa.Integer()),
+        sa.column("criterion_name", sa.String()),
+        sa.column("description", sa.String()),
+        sa.column("keywords", sa.JSON()),
+        sa.column("weight", sa.Integer()),
+        sa.column("sort_order", sa.Integer()),
     )
-    action_table = sa.table(
+    action_template_table = sa.table(
         "action_template",
-        sa.column("id", sa.Integer),
-        sa.column("job_group_id", sa.Integer),
-        sa.column("criterion_id", sa.Integer),
-        sa.column("action_title", sa.String),
-        sa.column("action_detail", sa.Text),
-        sa.column("sort_order", sa.Integer),
+        sa.column("id", sa.Integer()),
+        sa.column("job_group_id", sa.Integer()),
+        sa.column("criterion_id", sa.Integer()),
+        sa.column("action_title", sa.String()),
+        sa.column("action_detail", sa.Text()),
+        sa.column("sort_order", sa.Integer()),
     )
 
-    op.bulk_insert(job_group_table, JOB_GROUPS)
-    op.bulk_insert(criteria_table, CRITERIA)
-    op.bulk_insert(
-        action_table,
-        [
-            {
-                "id": action_id,
-                "job_group_id": job_group_id,
-                "criterion_id": criterion_id,
-                "action_title": title,
-                "action_detail": detail,
-                "sort_order": action_id,
-            }
-            for action_id, job_group_id, criterion_id, title, detail in ACTIONS
-        ],
-    )
+    if _is_empty("job_group"):
+        op.bulk_insert(job_group_table, JOB_GROUPS)
+    if _is_empty("job_readiness_criteria"):
+        op.bulk_insert(criteria_table, CRITERIA)
+    if _is_empty("action_template"):
+        op.bulk_insert(action_template_table, ACTION_TEMPLATES)
 
 
 def downgrade() -> None:
-    op.drop_table("career_diagnosis_result")
-    op.drop_table("action_template")
-    op.drop_table("job_readiness_criteria")
-    op.drop_table("job_group")
-
+    for table_name in (
+        "career_diagnosis_result",
+        "action_template",
+        "job_readiness_criteria",
+        "job_group",
+    ):
+        if _has_table(table_name):
+            op.drop_table(table_name)
