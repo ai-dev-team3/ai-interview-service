@@ -54,6 +54,12 @@ def test_upload_resume_requires_auth(client):
     assert res.status_code == 401
 
 
+def test_resume_management_requires_auth(client):
+    assert client.get("/resume").status_code == 401
+    assert client.patch("/resume", data={"resume_text": "수정 이력서"}).status_code == 401
+    assert client.delete("/resume").status_code == 401
+
+
 def test_upload_resume_creates_row_and_structures(auth_client, test_user, db_session):
     res = auth_client.post(
         "/resume",
@@ -136,15 +142,114 @@ def test_reupload_replaces_content_and_restructures(auth_client, test_user, db_s
     assert texts[1:] == [q["question_text"] for q in FAKE_GENERATED]
 
 
+def test_get_resume_returns_registered_resume(auth_client, test_user, db_session):
+    resume = Resume(user_id=test_user.id, filename="resume.pdf", content="이력서 내용")
+    db_session.add(resume)
+    db_session.commit()
+
+    res = auth_client.get("/resume")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["id"] == resume.id
+    assert body["filename"] == "resume.pdf"
+    assert body["content"] == "이력서 내용"
+
+
+def test_get_resume_without_resume_returns_404(auth_client):
+    res = auth_client.get("/resume")
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "등록된 이력서가 없습니다."
+
+
+def test_update_resume_replaces_content_and_questions(auth_client, test_user, db_session):
+    resume = Resume(
+        user_id=test_user.id,
+        filename="old.pdf",
+        content="이전 이력서",
+        structured={"skills": ["Java"]},
+        questions_generated=True,
+    )
+    resume.questions.append(ResumeQuestion(
+        question_text="옛 질문", question_type="기술형", is_default=False, sort_order=1,
+    ))
+    db_session.add(resume)
+    db_session.commit()
+    old_question_id = resume.questions[0].id
+
+    res = auth_client.patch(
+        "/resume",
+        data={"resume_text": "수정된 이력서", "filename": "updated.pdf"},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["message"] == "이력서가 수정되었습니다."
+    assert body["resume"]["content"] == "수정된 이력서"
+    assert body["resume"]["filename"] == "updated.pdf"
+    assert db_session.get(ResumeQuestion, old_question_id) is None
+
+    db_session.refresh(resume)
+    assert resume.content == "수정된 이력서"
+    assert resume.structured == FAKE_STRUCTURED
+    assert resume.questions[0].question_text == DEFAULT_QUESTION_TEXT
+
+
+def test_update_resume_without_registered_resume_returns_404(auth_client):
+    res = auth_client.patch("/resume", data={"resume_text": "수정된 이력서"})
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "등록된 이력서가 없습니다."
+
+
+def test_update_resume_rejects_empty_text(auth_client, test_user, db_session):
+    db_session.add(Resume(user_id=test_user.id, filename="resume.pdf", content="이력서 내용"))
+    db_session.commit()
+
+    res = auth_client.patch("/resume", data={"resume_text": "   "})
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "이력서 텍스트가 비어 있습니다."
+
+
+def test_delete_resume_removes_resume_and_questions(auth_client, test_user, db_session):
+    resume = Resume(user_id=test_user.id, filename="resume.pdf", content="이력서 내용")
+    resume.questions.append(ResumeQuestion(
+        question_text="질문", question_type="기술형", is_default=False, sort_order=1,
+    ))
+    db_session.add(resume)
+    db_session.commit()
+    resume_id = resume.id
+    question_id = resume.questions[0].id
+
+    res = auth_client.delete("/resume")
+
+    assert res.status_code == 204
+    assert db_session.get(Resume, resume_id) is None
+    assert db_session.get(ResumeQuestion, question_id) is None
+
+
+def test_delete_resume_without_registered_resume_returns_404(auth_client):
+    res = auth_client.delete("/resume")
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "등록된 이력서가 없습니다."
+
+
 def test_resume_status_reflects_registration(auth_client, test_user, db_session):
     res = auth_client.get("/resume/status")
     assert res.status_code == 200
     assert res.json()["has_resume"] is False
+    assert res.json()["has_cover_letter"] is False
+    assert res.json()["ready_for_career_diagnosis"] is False
 
-    auth_client.post("/resume", data={"resume_text": "저의 이력서입니다."})
+    auth_client.post("/resume", data={"resume_text": "저의 이력서와 자기소개서입니다. 지원동기는 개발 경험입니다."})
 
     res = auth_client.get("/resume/status")
     assert res.json()["has_resume"] is True
+    assert res.json()["has_cover_letter"] is False
+    assert res.json()["ready_for_career_diagnosis"] is False
 
 
 def test_list_questions_without_resume_returns_400(auth_client):

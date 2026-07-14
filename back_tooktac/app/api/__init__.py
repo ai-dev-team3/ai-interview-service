@@ -20,6 +20,8 @@ _ROUTER_MODULES = {
     "training_page_router": ".training_page",
     "rank_router": ".rank",
     "interview_schedule_router": ".interview_schedule",
+    "career_router": ".career",
+    "cover_letter_router": ".cover_letter",
 }
 
 __all__ = list(_ROUTER_MODULES)

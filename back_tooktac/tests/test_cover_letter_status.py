@@ -1,4 +1,4 @@
-from app.repository.career import CoverLetter, JobGroup
+from app.repository.career import CoverLetter, CoverLetterItem, JobGroup
 
 
 def test_resume_status_includes_cover_letter(auth_client, test_user, db_session):
@@ -18,8 +18,13 @@ def test_resume_status_includes_cover_letter(auth_client, test_user, db_session)
             user_id=test_user.id,
             job_group_id=job_group.id,
             title="test cover letter",
-            question_text="Why do you apply?",
-            answer_text="This is a test answer.",
+            items=[
+                CoverLetterItem(
+                    sort_order=1,
+                    question_text="Why do you apply?",
+                    answer_text="This is a test answer.",
+                ),
+            ],
         )
     )
     db_session.commit()
