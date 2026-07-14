@@ -83,7 +83,7 @@ export default function InterviewSetupPage() {
                   autoPlay
                   playsInline
                   muted
-                  className="absolute inset-0 w-full h-full object-cover z-0 rounded-2xl"
+                  className="absolute inset-0 w-full h-full object-cover z-0 rounded-2xl -scale-x-100"
               />
               {/*<div className="absolute inset-0 flex items-center justify-center z-10">*/}
               {/*  <img*/}

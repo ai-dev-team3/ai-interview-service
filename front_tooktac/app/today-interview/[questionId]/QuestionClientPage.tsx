@@ -205,7 +205,7 @@ export default function QuestionClientPage({ questionId }: Props) {
               <div className="relative w-[600px] h-[450px] bg-black rounded-2xl mb-8 flex items-center justify-center">
                 <video
                   id="webcam-video"
-                  className="absolute w-full h-full object-cover rounded-2xl"
+                  className="absolute w-full h-full object-cover rounded-2xl -scale-x-100"
                   autoPlay
                   muted
                   playsInline
