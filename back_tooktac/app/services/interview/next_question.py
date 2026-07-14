@@ -98,7 +98,7 @@ class NextQuestionAgent:
         self.llm = (
             llm
             if llm is not None
-            else get_chat_model(primary="gemini", temperature=0.4, schema=NextQuestionOut)
+            else get_chat_model(primary="openai", temperature=0.4, schema=NextQuestionOut)
         )
         self.chain = (
             ChatPromptTemplate.from_messages([("system", _SYSTEM), ("human", _HUMAN)])
