@@ -110,14 +110,14 @@ def test_구조화_출력이_폴백_모델에도_걸린다():
 
     RunnableWithFallbacks 에는 with_structured_output 이 없다. 순서를 잘못 잡으면
     주 모델만 스키마가 걸리고, 폴백으로 넘어간 순간 형식 강제가 사라진다 —
-    그리고 그건 Gemini 가 죽었을 때만 드러난다.
+    그리고 그건 OpenAI 가 죽었을 때만 드러난다.
     """
     from langchain_core.runnables import RunnableWithFallbacks
 
     from app.services.interview.next_question import NextQuestionOut
     from app.services.llm import get_chat_model
 
-    model = get_chat_model(primary="gemini", schema=NextQuestionOut)
+    model = get_chat_model(primary="openai", schema=NextQuestionOut)
 
     assert isinstance(model, RunnableWithFallbacks), "폴백이 구성되지 않았다"
 
