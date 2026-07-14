@@ -83,12 +83,10 @@ export function createMirrorCanvas(): HTMLCanvasElement {
     return canvas;
 }
 
-/** 비디오를 좌우 반전해 캔버스에 그린다. 비율은 무시하고 늘린다(서버 동작과 동일). */
-export function drawMirrored(canvas: HTMLCanvasElement, video: HTMLVideoElement): void {
+/** 비디오를 캔버스에 그린다. 비율은 무시하고 늘린다(서버 동작과 동일).. */
+export function drawVideo(canvas: HTMLCanvasElement, video: HTMLVideoElement): void {
     const ctx = canvas.getContext('2d')!;
     ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 }

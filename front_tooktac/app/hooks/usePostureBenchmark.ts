@@ -8,7 +8,7 @@ import {
     setPostureMode,
 } from '@/lib/postureMode';
 import { ANALYSIS_INTERVAL_MS } from '@/lib/postureProtocol';
-import { createMirrorCanvas, detect, drawMirrored, getLandmarkers } from '@/lib/postureVision';
+import { createMirrorCanvas, detect, drawVideo, getLandmarkers } from '@/lib/postureVision';
 
 /**
  * 클라이언트 추론 성능을 재서 면접 전체에 쓸 모드를 정한다.
@@ -39,7 +39,7 @@ export function usePostureBenchmark(enabled: boolean) {
 
                     let elapsedMs: number;
                     try {
-                        drawMirrored(canvas, video);
+                        drawVideo(canvas, video);
                         elapsedMs = detect(landmarkers, canvas).elapsedMs;
                     } catch (e) {
                         console.warn('[posture] 벤치마크 추론 실패 — 서버 모드', e);
