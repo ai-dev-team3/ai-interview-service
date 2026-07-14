@@ -13,6 +13,7 @@ from app.repository.career import (
     JobReadinessCriteria,
 )
 from app.repository.user import User
+from app.services.cover_letter import cover_letter_service
 from app.services.resume import resume_service
 
 
@@ -284,6 +285,16 @@ def _flatten(value: Any) -> str:
     return str(value)
 
 
+def _has_meaningful_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, dict):
+        return any(_has_meaningful_value(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_meaningful_value(v) for v in value)
+    return value is not None
+
+
 def _keyword_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value if str(item).strip()]
@@ -357,7 +368,7 @@ def _specificity_score(structured: dict, content: str) -> int:
 
     sections = 0
     for key in ("skills", "career", "projects", "self_introduction", "education"):
-        if resume_service._has_meaningful_value(structured.get(key)):  # noqa: SLF001
+        if _has_meaningful_value(structured.get(key)):
             sections += 1
 
     return min(30, 6 + length_score + sections * 3)
@@ -454,9 +465,12 @@ def create_diagnosis(db: Session, user_id: int) -> dict:
 
     resume = resume_service.get_resume(db, user_id)
     user = db.get(User, user_id)
+    cover_letter = cover_letter_service.get_latest_cover_letter(db, user_id)
+    cover_letter_text = cover_letter_service.to_analysis_text(cover_letter)
     structured = _structured_to_dict(resume.structured)
     desired_job = user.desired_job if user and user.desired_job else ""
-    corpus = f"{desired_job} {resume.content} {_flatten(structured)}"
+    content = f"{resume.content}\n{cover_letter_text}"
+    corpus = f"{desired_job} {content} {_flatten(structured)}"
 
     groups, criteria_by_group = _load_active_groups_with_criteria(db)
     job_group = _choose_job_group(groups, criteria_by_group, desired_job, corpus)
@@ -465,7 +479,7 @@ def create_diagnosis(db: Session, user_id: int) -> dict:
         raise CareerDiagnosisConfigError("선택된 직무군의 진단 기준이 없습니다.")
 
     criteria_results = [
-        _score_criterion(criterion, structured, resume.content)
+        _score_criterion(criterion, structured, content)
         for criterion in criteria
     ]
     total_weight = sum(item["weight"] for item in criteria_results) or 100

@@ -1,4 +1,4 @@
-from app.repository.career import CareerDiagnosisResult, JobGroup
+from app.repository.career import CareerDiagnosisResult, CoverLetter, JobGroup
 from app.repository.resume import Resume
 
 
@@ -22,6 +22,8 @@ def test_career_diagnosis_requires_resume_and_cover_letter(auth_client):
 
 
 def test_career_diagnosis_returns_action_plan(auth_client, test_user, db_session):
+    auth_client.get("/career/job-groups")
+
     resume = Resume(
         user_id=test_user.id,
         filename="resume.pdf",
@@ -47,6 +49,17 @@ def test_career_diagnosis_returns_action_plan(auth_client, test_user, db_session
         },
     )
     db_session.add(resume)
+    cover_letter = CoverLetter(
+        user_id=test_user.id,
+        job_group_id=1,
+        title="지원동기",
+        question_text="지원동기를 작성해주세요.",
+        answer_text=(
+            "사용자 문제를 해결하는 서비스를 만들고 싶습니다. Python FastAPI MySQL 프로젝트를 "
+            "개발했고 GitHub에 정리했습니다."
+        ),
+    )
+    db_session.add(cover_letter)
     db_session.commit()
 
     res = auth_client.post("/career/diagnosis")

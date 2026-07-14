@@ -5,11 +5,19 @@ import { extractTextFromPDF, PageResult } from '@/lib/pdfExtractor';
 
 interface Props {
   onExtracted: (text: string, fileName?: string) => void;
+  documentName?: string;
+  confirmLabel?: string;
+  doneMessage?: string;
 }
 
 type ExtractionStatus = 'idle' | 'extracting' | 'review' | 'done';
 
-export default function ResumeUploader({ onExtracted }: Props) {
+export default function ResumeUploader({
+  onExtracted,
+  documentName = '이력서',
+  confirmLabel,
+  doneMessage,
+}: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
@@ -81,7 +89,7 @@ export default function ResumeUploader({ onExtracted }: Props) {
             <span className="text-2xl text-gray-400">📄</span>
           </div>
           <p className="text-sm font-medium text-gray-700 mb-1">
-            {fileName || '이력서 PDF를 선택하세요'}
+            {fileName || `${documentName} PDF를 선택하세요`}
           </p>
           <p className="text-xs text-gray-500">PDF 파일 (최대 10MB)</p>
         </div>
@@ -198,7 +206,7 @@ export default function ResumeUploader({ onExtracted }: Props) {
             }`}
           >
             {allReviewed
-              ? '✓ 이력서 텍스트 확정'
+              ? (confirmLabel || `✓ ${documentName} 텍스트 확정`)
               : `OCR 페이지 검수 후 확정 가능 (${ocrPages.filter((p) => reviewed[p.pageNumber]).length}/${ocrPages.length} 완료)`}
           </button>
         </div>
@@ -206,7 +214,7 @@ export default function ResumeUploader({ onExtracted }: Props) {
 
       {status === 'done' && (
         <p className="text-sm text-green-600 font-medium text-center py-2">
-          ✓ 이력서 텍스트가 확정되었습니다.
+          {doneMessage || `✓ ${documentName} 텍스트가 확정되었습니다.`}
         </p>
       )}
     </div>

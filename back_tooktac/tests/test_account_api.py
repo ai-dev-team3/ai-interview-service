@@ -2,6 +2,7 @@
 from datetime import date, datetime
 
 from app.core.password import hash_password, is_bcrypt_hash, verify_password
+from app.repository.career import CoverLetter, JobGroup
 from app.repository.resume import Resume
 from app.repository.user import InterviewSchedule, User
 
@@ -70,13 +71,23 @@ def test_change_password_rejects_same_password(auth_client, db_session, test_use
     assert "새 비밀번호" in res.json()["detail"]
 
 
-def test_delete_account_removes_user_resume_and_schedule(auth_client, db_session, test_user):
+def test_delete_account_removes_user_resume_cover_letter_and_schedule(auth_client, db_session, test_user):
     user_id = test_user.id
     username = test_user.username
+    job_group = JobGroup(name="dev-test", description="test", is_active=True)
+    db_session.add(job_group)
+    db_session.flush()
 
     db_session.add_all(
         [
             Resume(user_id=user_id, filename="resume.pdf", content="이력서 내용"),
+            CoverLetter(
+                user_id=user_id,
+                job_group_id=job_group.id,
+                title="삭제될 자소서",
+                question_text="질문",
+                answer_text="답변",
+            ),
             InterviewSchedule(
                 user_id=username,
                 scheduled_at=datetime.combine(date.today(), datetime.min.time()),
@@ -95,5 +106,6 @@ def test_delete_account_removes_user_resume_and_schedule(auth_client, db_session
 
     assert db_session.query(User).filter_by(id=user_id).first() is None
     assert db_session.query(Resume).filter_by(user_id=user_id).first() is None
+    assert db_session.query(CoverLetter).filter_by(user_id=user_id).first() is None
     assert db_session.query(InterviewSchedule).filter_by(user_id=username).first() is None
     assert auth_client.get("/me").status_code == 401

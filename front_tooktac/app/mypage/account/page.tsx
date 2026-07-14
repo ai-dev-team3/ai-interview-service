@@ -6,14 +6,30 @@ import { useRouter } from 'next/navigation';
 import api, {
   changePassword,
   deleteAccount,
+  deleteCoverLetter,
+  deleteResume,
   getAccount,
+  getCoverLetters,
+  getJobGroups,
+  getResume,
   getResumeStatus,
+  updateCoverLetter,
+  updateResume,
+  uploadCoverLetter,
   uploadResume,
   type AccountInfo,
+  type CoverLetter,
+  type JobGroup,
+  type ResumeDocument,
 } from '@/api/api';
 import ResumeUploader from '@/components/ResumeUploader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUser } from '@/contexts/UserContext';
+
+type CoverLetterPair = {
+  question_text: string;
+  answer_text: string;
+};
 
 export default function AccountPage() {
   const router = useRouter();
@@ -25,13 +41,52 @@ export default function AccountPage() {
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [hasResume, setHasResume] = useState<boolean | null>(null);
+  const [hasCoverLetter, setHasCoverLetter] = useState<boolean | null>(null);
   const [resumeSaving, setResumeSaving] = useState(false);
+  const [resumeEditSaving, setResumeEditSaving] = useState(false);
+  const [resumeDeleting, setResumeDeleting] = useState(false);
+  const [resumeEditorOpen, setResumeEditorOpen] = useState(false);
+  const [resumeDocument, setResumeDocument] = useState<ResumeDocument | null>(null);
+  const [resumeForm, setResumeForm] = useState({
+    filename: '',
+    content: '',
+  });
+  const [coverLetterSaving, setCoverLetterSaving] = useState(false);
+  const [coverLetterDeletingId, setCoverLetterDeletingId] = useState<number | null>(null);
+  const [editingCoverLetterId, setEditingCoverLetterId] = useState<number | null>(null);
+  const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([]);
+  const [jobGroups, setJobGroups] = useState<JobGroup[]>([]);
+  const [coverLetterForm, setCoverLetterForm] = useState({
+    company_name: '',
+    title: '',
+    job_group_id: '',
+  });
+  const [coverLetterPairs, setCoverLetterPairs] = useState<CoverLetterPair[]>([
+    { question_text: '', answer_text: '' },
+  ]);
   const resumeSectionRef = useRef<HTMLDivElement>(null);
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
     new_password: '',
     confirm_password: '',
   });
+
+  const refreshResumeDocument = async () => {
+    try {
+      const resume = await getResume();
+      setResumeDocument(resume);
+      setResumeForm({
+        filename: resume.filename || '',
+        content: resume.content || '',
+      });
+      setHasResume(true);
+      return resume;
+    } catch {
+      setResumeDocument(null);
+      setResumeForm({ filename: '', content: '' });
+      return null;
+    }
+  };
 
   useEffect(() => {
     const loadAccount = async () => {
@@ -52,11 +107,39 @@ export default function AccountPage() {
       try {
         const data = await getResumeStatus();
         setHasResume(data.has_resume);
+        setHasCoverLetter(data.has_cover_letter);
       } catch {
         setHasResume(null);
+        setHasCoverLetter(null);
       }
     };
     loadResumeStatus();
+  }, []);
+
+  useEffect(() => {
+    refreshResumeDocument();
+  }, []);
+
+  useEffect(() => {
+    const loadCoverLetterData = async () => {
+      try {
+        const [groups, letters] = await Promise.all([
+          getJobGroups(),
+          getCoverLetters(),
+        ]);
+        setJobGroups(groups);
+        setCoverLetters(letters);
+        setHasCoverLetter(letters.length > 0);
+        setCoverLetterForm(prev => ({
+          ...prev,
+          job_group_id: prev.job_group_id || (groups[0] ? String(groups[0].id) : ''),
+        }));
+      } catch {
+        setJobGroups([]);
+        setCoverLetters([]);
+      }
+    };
+    loadCoverLetterData();
   }, []);
 
   useEffect(() => {
@@ -84,7 +167,9 @@ export default function AccountPage() {
     setResumeSaving(true);
     try {
       const result = await uploadResume(text, fileName);
+      await refreshResumeDocument();
       setHasResume(true);
+      setResumeEditorOpen(false);
       setToast(
         result?.structured === false
           ? '이력서가 저장되었습니다. 분석은 면접 시작 시 자동으로 진행됩니다.'
@@ -94,6 +179,204 @@ export default function AccountPage() {
       setToast('이력서 등록에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setResumeSaving(false);
+    }
+  };
+
+  const handleResumeFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = e.target;
+    setResumeForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const openResumeEditor = () => {
+    if (!resumeDocument) return;
+    setResumeForm({
+      filename: resumeDocument.filename || '',
+      content: resumeDocument.content || '',
+    });
+    setResumeEditorOpen(true);
+  };
+
+  const handleResumeUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const content = resumeForm.content.trim();
+    if (!content) {
+      setToast('이력서 내용을 입력해주세요.');
+      return;
+    }
+
+    setResumeEditSaving(true);
+    try {
+      const saved = await updateResume(content, resumeForm.filename.trim() || undefined);
+      setResumeDocument(saved);
+      setResumeForm({
+        filename: saved.filename || '',
+        content: saved.content || '',
+      });
+      setHasResume(true);
+      setToast('이력서가 수정되었습니다.');
+    } catch (err: any) {
+      setToast(err?.response?.data?.detail || '이력서 수정에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setResumeEditSaving(false);
+    }
+  };
+
+  const handleResumeDelete = async () => {
+    if (!window.confirm('등록된 이력서를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    setResumeDeleting(true);
+    try {
+      await deleteResume();
+      setResumeDocument(null);
+      setResumeForm({ filename: '', content: '' });
+      setResumeEditorOpen(false);
+      setHasResume(false);
+      setToast('이력서가 삭제되었습니다.');
+    } catch (err: any) {
+      setToast(err?.response?.data?.detail || '이력서 삭제에 실패했습니다.');
+    } finally {
+      setResumeDeleting(false);
+    }
+  };
+
+  const handleCoverLetterChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setCoverLetterForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCoverLetterPairChange = (
+    index: number,
+    field: keyof CoverLetterPair,
+    value: string,
+  ) => {
+    setCoverLetterPairs(prev =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  const addCoverLetterPair = () => {
+    setCoverLetterPairs(prev => [...prev, { question_text: '', answer_text: '' }]);
+  };
+
+  const removeCoverLetterPair = (index: number) => {
+    setCoverLetterPairs(prev =>
+      prev.length === 1
+        ? [{ question_text: '', answer_text: '' }]
+        : prev.filter((_, itemIndex) => itemIndex !== index)
+    );
+  };
+
+  const resetCoverLetterEditor = () => {
+    setEditingCoverLetterId(null);
+    setCoverLetterForm(prev => ({ ...prev, company_name: '', title: '' }));
+    setCoverLetterPairs([{ question_text: '', answer_text: '' }]);
+  };
+
+  const selectCoverLetter = (letter: CoverLetter) => {
+    setEditingCoverLetterId(letter.id);
+    setCoverLetterForm({
+      company_name: letter.company_name || '',
+      title: letter.title || '',
+      job_group_id: String(letter.job_group_id),
+    });
+    setCoverLetterPairs(
+      letter.items.length > 0
+        ? letter.items.map(item => ({
+            question_text: item.question_text,
+            answer_text: item.answer_text,
+          }))
+        : [{ question_text: '', answer_text: '' }]
+    );
+  };
+
+  const handleCoverLetterDelete = async (id: number) => {
+    if (!window.confirm('등록된 자소서를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    setCoverLetterDeletingId(id);
+    try {
+      await deleteCoverLetter(id);
+      setCoverLetters(prev => {
+        const next = prev.filter(letter => letter.id !== id);
+        setHasCoverLetter(next.length > 0);
+        return next;
+      });
+      if (editingCoverLetterId === id) {
+        resetCoverLetterEditor();
+      }
+      setToast('자소서가 삭제되었습니다.');
+    } catch (err: any) {
+      setToast(err?.response?.data?.detail || '자소서 삭제에 실패했습니다.');
+    } finally {
+      setCoverLetterDeletingId(null);
+    }
+  };
+
+  const handleCoverLetterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!coverLetterForm.job_group_id) {
+      setToast('자소서 직무군을 선택해주세요.');
+      return;
+    }
+
+    const items = coverLetterPairs
+      .map(item => ({
+        question_text: item.question_text.trim(),
+        answer_text: item.answer_text.trim(),
+      }))
+      .filter(item => item.question_text || item.answer_text);
+
+    if (items.length === 0) {
+      setToast('자소서 질문과 답변을 1개 이상 입력해주세요.');
+      return;
+    }
+    if (items.some(item => !item.question_text || !item.answer_text)) {
+      setToast('각 항목의 질문과 답변을 모두 입력해주세요.');
+      return;
+    }
+
+    setCoverLetterSaving(true);
+    try {
+      const payload = {
+        job_group_id: Number(coverLetterForm.job_group_id),
+        company_name: coverLetterForm.company_name.trim() || undefined,
+        title: coverLetterForm.title.trim() || undefined,
+        items,
+      };
+      const saved = editingCoverLetterId
+        ? await updateCoverLetter(editingCoverLetterId, payload)
+        : await uploadCoverLetter(payload);
+
+      setCoverLetters(prev =>
+        editingCoverLetterId
+          ? prev.map(letter => (letter.id === saved.id ? saved : letter))
+          : [saved, ...prev]
+      );
+      setHasCoverLetter(true);
+      if (!editingCoverLetterId) {
+        resetCoverLetterEditor();
+      } else {
+        selectCoverLetter(saved);
+      }
+      setToast(editingCoverLetterId ? '자소서가 수정되었습니다.' : '자소서가 등록되었습니다.');
+    } catch (err: any) {
+      setToast(
+        err?.response?.data?.detail ||
+          (editingCoverLetterId
+            ? '자소서 수정에 실패했습니다. 다시 시도해주세요.'
+            : '자소서 등록에 실패했습니다. 다시 시도해주세요.')
+      );
+    } finally {
+      setCoverLetterSaving(false);
     }
   };
 
@@ -219,12 +502,277 @@ export default function AccountPage() {
               )}
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              이력서를 등록하면 이력서·자기소개서 기반 맞춤 면접 질문이 생성됩니다.
+              이력서를 등록하면 면접 질문 생성과 취업 준비도 진단에 활용됩니다.
               {hasResume ? ' 새 파일을 업로드하면 기존 이력서를 대체합니다.' : ''}
             </p>
             <ResumeUploader onExtracted={handleResumeExtracted} />
             {resumeSaving && (
               <p className="mt-2 text-sm text-gray-500 text-center">저장 중...</p>
+            )}
+
+            {resumeDocument && (
+              <div className="mt-5 rounded-lg border border-gray-100 px-4 py-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#27386d]">
+                      등록된 이력서
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {resumeDocument.filename || '파일명 없음'} · {resumeDocument.content?.length || 0}자
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={openResumeEditor}
+                      className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-[#27386d] hover:bg-blue-100"
+                    >
+                      내용 보기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResumeDelete}
+                      disabled={resumeDeleting}
+                      className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {resumeDeleting ? '삭제 중' : '삭제'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {resumeEditorOpen && (
+              <form onSubmit={handleResumeUpdate} className="mt-4 space-y-3 rounded-lg border border-[#6ce5e8] bg-[#f3fdff] p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-semibold text-[#27386d]">이력서 내용 수정</p>
+                  <button
+                    type="button"
+                    onClick={() => setResumeEditorOpen(false)}
+                    className="self-start rounded-full border border-[#27386d]/20 px-3 py-1 text-xs font-medium text-[#27386d] hover:bg-white sm:self-auto"
+                  >
+                    닫기
+                  </button>
+                </div>
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">파일명</span>
+                  <input
+                    name="filename"
+                    value={resumeForm.filename}
+                    onChange={handleResumeFormChange}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8]"
+                    placeholder="선택 입력"
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">이력서 내용</span>
+                  <textarea
+                    name="content"
+                    value={resumeForm.content}
+                    onChange={handleResumeFormChange}
+                    rows={10}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8] resize-y"
+                    placeholder="이력서 내용을 입력하세요."
+                  />
+                </label>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={resumeEditSaving}
+                    className="px-5 py-2 rounded-full bg-[#27386d] text-white text-sm font-medium hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {resumeEditSaving ? '저장 중...' : '수정 저장'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-[#27386d]">자소서 관리</h2>
+              {hasCoverLetter !== null && (
+                <span
+                  className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    hasCoverLetter ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {hasCoverLetter ? '등록됨' : '미등록'}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              자기소개서는 이력서와 별도로 저장됩니다. 여러 개를 등록할 수 있고, 최신 자소서를 취업 준비도 진단에 함께 반영합니다.
+            </p>
+
+            <form onSubmit={handleCoverLetterSubmit} className="space-y-4">
+              <div className="flex flex-col gap-2 rounded-lg bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium text-[#27386d]">
+                  {editingCoverLetterId
+                    ? '선택한 자소서를 읽거나 수정 중입니다.'
+                    : '새 자소서를 작성 중입니다.'}
+                </p>
+                {editingCoverLetterId && (
+                  <button
+                    type="button"
+                    onClick={resetCoverLetterEditor}
+                    className="self-start rounded-full border border-[#27386d]/20 px-3 py-1 text-xs font-medium text-[#27386d] hover:bg-white sm:self-auto"
+                  >
+                    새 자소서 작성
+                  </button>
+                )}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">직무군</span>
+                  <select
+                    name="job_group_id"
+                    value={coverLetterForm.job_group_id}
+                    onChange={handleCoverLetterChange}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8]"
+                  >
+                    {jobGroups.map(group => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">회사명</span>
+                  <input
+                    name="company_name"
+                    value={coverLetterForm.company_name}
+                    onChange={handleCoverLetterChange}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8]"
+                    placeholder="선택 입력"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">제목</span>
+                  <input
+                    name="title"
+                    value={coverLetterForm.title}
+                    onChange={handleCoverLetterChange}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8]"
+                    placeholder="선택 입력"
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-4">
+                {coverLetterPairs.map((pair, index) => (
+                  <div key={index} className="rounded-lg border border-gray-100 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-sm font-semibold text-[#27386d]">
+                        문항 {index + 1}
+                      </span>
+                      {coverLetterPairs.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeCoverLetterPair(index)}
+                          className="h-8 w-8 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label={`문항 ${index + 1} 삭제`}
+                        >
+                          <i className="ri-close-line" />
+                        </button>
+                      )}
+                    </div>
+                    <label className="block">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">질문</span>
+                      <input
+                        value={pair.question_text}
+                        onChange={(e) => handleCoverLetterPairChange(index, 'question_text', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8]"
+                        placeholder="예: 지원동기를 작성해주세요."
+                      />
+                    </label>
+                    <label className="mt-3 block">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">답변</span>
+                      <textarea
+                        value={pair.answer_text}
+                        onChange={(e) => handleCoverLetterPairChange(index, 'answer_text', e.target.value)}
+                        rows={5}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6ce5e8] resize-y"
+                        placeholder="답변을 입력하세요."
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="submit"
+                  disabled={coverLetterSaving}
+                  className="px-5 py-2 rounded-full bg-[#27386d] text-white text-sm font-medium hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {coverLetterSaving
+                    ? '저장 중...'
+                    : editingCoverLetterId
+                      ? '수정 저장'
+                      : '자소서 저장'}
+                </button>
+                <button
+                  type="button"
+                  onClick={addCoverLetterPair}
+                  className="h-11 w-11 rounded-full bg-[#6ce5e8] text-[#27386d] shadow-sm hover:bg-opacity-90"
+                  aria-label="질문 답변 추가"
+                >
+                  <i className="ri-add-line text-xl" />
+                </button>
+              </div>
+            </form>
+
+            {coverLetters.length > 0 && (
+              <div className="mt-5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[#27386d]">등록된 자소서</p>
+                  <span className="text-xs text-gray-500">{coverLetters.length}개</span>
+                </div>
+                {coverLetters.map(letter => (
+                  <div
+                    key={letter.id}
+                    className={`flex items-start justify-between gap-3 rounded-lg border px-4 py-3 ${
+                      editingCoverLetterId === letter.id
+                        ? 'border-[#6ce5e8] bg-[#f3fdff]'
+                        : 'border-gray-100'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => selectCoverLetter(letter)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="text-sm font-semibold text-[#27386d] truncate">{letter.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {letter.company_name || '회사명 없음'} · {letter.created_at ? new Date(letter.created_at).toLocaleDateString() : '-'}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">문항 {letter.items.length}개</p>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => selectCoverLetter(letter)}
+                        className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-[#27386d] hover:bg-blue-100"
+                      >
+                        열기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCoverLetterDelete(letter.id)}
+                        disabled={coverLetterDeletingId === letter.id}
+                        className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {coverLetterDeletingId === letter.id ? '삭제 중' : '삭제'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

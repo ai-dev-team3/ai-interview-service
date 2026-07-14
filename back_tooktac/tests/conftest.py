@@ -79,6 +79,7 @@ def test_app(db_session):
     from app.api.interview import router as interview_router
     from app.api.interview_schedule import router as interview_schedule_router
     from app.api.career import router as career_router
+    from app.api.cover_letter import router as cover_letter_router
     from app.api.rank import router as rank_router
     from app.api.report import router as report_router
     from app.api.result import router as result_router
@@ -90,7 +91,7 @@ def test_app(db_session):
     app = FastAPI()
     for router in (signup_router, user_router, resume_router, interview_router,
                    result_router, report_router, training_page_router, rank_router,
-                   interview_schedule_router, career_router):
+                   interview_schedule_router, career_router, cover_letter_router):
         app.include_router(router)
 
     def override_get_db():

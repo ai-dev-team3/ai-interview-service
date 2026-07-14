@@ -82,6 +82,35 @@ export const uploadResume = async (resumeText: string, filename?: string) => {
   return response.data; // { message, resume_id }
 };
 
+export type ResumeDocument = {
+  id: number;
+  user_id: number;
+  filename: string | null;
+  content: string | null;
+  structured: unknown;
+  questions_generated: boolean;
+};
+
+export const getResume = async (): Promise<ResumeDocument> => {
+  const response = await api.get('/resume');
+  return response.data;
+};
+
+export const updateResume = async (
+  resumeText: string,
+  filename?: string,
+): Promise<ResumeDocument> => {
+  const form = new FormData();
+  form.append('resume_text', resumeText);
+  if (filename) form.append('filename', filename);
+  const response = await api.patch('/resume', form);
+  return response.data.resume;
+};
+
+export const deleteResume = async (): Promise<void> => {
+  await api.delete('/resume');
+};
+
 export type ResumeStatus = {
   has_resume: boolean;
   has_cover_letter: boolean;
@@ -92,6 +121,88 @@ export type ResumeStatus = {
 export const getResumeStatus = async (): Promise<ResumeStatus> => {
   const response = await api.get('/resume/status');
   return response.data;
+};
+
+export type JobGroup = {
+  id: number;
+  name: string;
+  description: string | null;
+};
+
+export const getJobGroups = async (): Promise<JobGroup[]> => {
+  const response = await api.get('/career/job-groups');
+  return response.data;
+};
+
+export type CoverLetter = {
+  id: number;
+  user_id: number;
+  company_name: string | null;
+  job_group_id: number;
+  title: string;
+  question_text: string | null;
+  answer_text: string | null;
+  items: Array<{
+    question_text: string;
+    answer_text: string;
+  }>;
+  created_at: string | null;
+};
+
+export const getCoverLetters = async (): Promise<CoverLetter[]> => {
+  const response = await api.get('/cover-letters');
+  return response.data;
+};
+
+export const uploadCoverLetter = async (
+  payload: {
+    job_group_id: number;
+    title?: string;
+    company_name?: string;
+    items: Array<{
+      question_text: string;
+      answer_text: string;
+    }>;
+  },
+): Promise<CoverLetter> => {
+  const form = new FormData();
+  form.append('job_group_id', String(payload.job_group_id));
+  if (payload.title) form.append('title', payload.title);
+  if (payload.company_name) form.append('company_name', payload.company_name);
+  payload.items.forEach((item) => {
+    form.append('question_text', item.question_text);
+    form.append('answer_text', item.answer_text);
+  });
+  const response = await api.post('/cover-letters', form);
+  return response.data;
+};
+
+export const updateCoverLetter = async (
+  id: number,
+  payload: {
+    job_group_id: number;
+    title?: string;
+    company_name?: string;
+    items: Array<{
+      question_text: string;
+      answer_text: string;
+    }>;
+  },
+): Promise<CoverLetter> => {
+  const form = new FormData();
+  form.append('job_group_id', String(payload.job_group_id));
+  if (payload.title) form.append('title', payload.title);
+  if (payload.company_name) form.append('company_name', payload.company_name);
+  payload.items.forEach((item) => {
+    form.append('question_text', item.question_text);
+    form.append('answer_text', item.answer_text);
+  });
+  const response = await api.patch(`/cover-letters/${id}`, form);
+  return response.data;
+};
+
+export const deleteCoverLetter = async (id: number): Promise<void> => {
+  await api.delete(`/cover-letters/${id}`);
 };
 
 export type CareerCriteriaResult = {

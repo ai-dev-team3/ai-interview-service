@@ -76,6 +76,14 @@ def upsert_resume(db: Session, user_id: int, content: str, filename: str | None 
     return resume
 
 
+def delete_resume(db: Session, user_id: int) -> None:
+    resume = get_resume(db, user_id)
+    if not resume or not resume.content:
+        raise ResumeNotFoundError("등록된 이력서가 없습니다.")
+    db.delete(resume)
+    db.commit()
+
+
 def _seed_default_question(resume: Resume) -> None:
     """기본 자기소개 질문을 풀 맨 앞에 넣는다. LLM 생성 개수에 포함하지 않는다."""
     resume.questions.append(ResumeQuestion(

@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _serialize_resume(resume) -> dict:
+    return {
+        "id": resume.id,
+        "user_id": resume.user_id,
+        "filename": resume.filename,
+        "content": resume.content,
+        "structured": resume.structured,
+        "questions_generated": resume.questions_generated,
+    }
+
+
 @router.post("/resume")
 def upload_resume(
     resume_text: str = Form(...),
@@ -49,6 +60,51 @@ def upload_resume(
         "questions_generated": questions_generated,
         **resume_status,
     }
+
+
+@router.get("/resume")
+def get_resume(db: Session = Depends(get_db), user_id=Depends(get_current_user)):
+    resume = resume_service.get_resume(db, user_id)
+    if not resume or not resume.content:
+        raise HTTPException(status_code=404, detail="등록된 이력서가 없습니다.")
+    return _serialize_resume(resume)
+
+
+@router.patch("/resume")
+def update_resume(
+    resume_text: str = Form(...),
+    filename: str = Form(None),
+    db: Session = Depends(get_db),
+    user_id=Depends(get_current_user),
+):
+    text = (resume_text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="이력서 텍스트가 비어 있습니다.")
+
+    if not resume_service.has_resume(db, user_id):
+        raise HTTPException(status_code=404, detail="등록된 이력서가 없습니다.")
+
+    resume = resume_service.upsert_resume(db, user_id, content=text, filename=filename)
+    structured = resume_service.try_structure(db, resume)
+    questions_generated = (
+        resume_service.try_generate_questions(db, resume) if structured else False
+    )
+    return {
+        "message": "이력서가 수정되었습니다.",
+        "resume_id": resume.id,
+        "structured": structured,
+        "questions_generated": questions_generated,
+        **resume_service.get_resume_status(db, user_id),
+        "resume": _serialize_resume(resume),
+    }
+
+
+@router.delete("/resume", status_code=status.HTTP_204_NO_CONTENT)
+def delete_resume(db: Session = Depends(get_db), user_id=Depends(get_current_user)):
+    try:
+        resume_service.delete_resume(db, user_id)
+    except resume_service.ResumeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/resume/status")
