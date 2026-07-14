@@ -41,8 +41,9 @@ export default function FinalReportLoadingPage() {
 
     return (
         <div className="min-h-screen bg-[#e7f8ff] flex flex-col items-center justify-center">
-            <div className="w-24 h-24 bg-gradient-to-r from-[#6ce5e8] to-[#27386d] rounded-full flex items-center justify-center mb-8 animate-spin">
-                <div className="w-16 h-16 bg-[#e7f8ff] rounded-full flex items-center justify-center">
+            <div className="relative w-24 h-24 mb-8">
+                <div className="absolute inset-0 bg-gradient-to-r from-[#6ce5e8] to-[#27386d] rounded-full animate-spin"></div>
+                <div className="absolute inset-4 bg-[#e7f8ff] rounded-full flex items-center justify-center">
                     <i className="ri-file-chart-line text-2xl text-[#27386d]"></i>
                 </div>
             </div>
