@@ -152,17 +152,17 @@ export const getCoverLetters = async (): Promise<CoverLetter[]> => {
   return response.data;
 };
 
-export const uploadCoverLetter = async (
-  payload: {
-    job_group_id: number;
-    title?: string;
-    company_name?: string;
-    items: Array<{
-      question_text: string;
-      answer_text: string;
-    }>;
-  },
-): Promise<CoverLetter> => {
+type CoverLetterPayload = {
+  job_group_id: number;
+  title?: string;
+  company_name?: string;
+  items: Array<{
+    question_text: string;
+    answer_text: string;
+  }>;
+};
+
+const buildCoverLetterForm = (payload: CoverLetterPayload) => {
   const form = new FormData();
   form.append('job_group_id', String(payload.job_group_id));
   if (payload.title) form.append('title', payload.title);
@@ -171,30 +171,22 @@ export const uploadCoverLetter = async (
     form.append('question_text', item.question_text);
     form.append('answer_text', item.answer_text);
   });
+  return form;
+};
+
+export const uploadCoverLetter = async (
+  payload: CoverLetterPayload,
+): Promise<CoverLetter> => {
+  const form = buildCoverLetterForm(payload);
   const response = await api.post('/cover-letters', form);
   return response.data;
 };
 
 export const updateCoverLetter = async (
   id: number,
-  payload: {
-    job_group_id: number;
-    title?: string;
-    company_name?: string;
-    items: Array<{
-      question_text: string;
-      answer_text: string;
-    }>;
-  },
+  payload: CoverLetterPayload,
 ): Promise<CoverLetter> => {
-  const form = new FormData();
-  form.append('job_group_id', String(payload.job_group_id));
-  if (payload.title) form.append('title', payload.title);
-  if (payload.company_name) form.append('company_name', payload.company_name);
-  payload.items.forEach((item) => {
-    form.append('question_text', item.question_text);
-    form.append('answer_text', item.answer_text);
-  });
+  const form = buildCoverLetterForm(payload);
   const response = await api.patch(`/cover-letters/${id}`, form);
   return response.data;
 };
@@ -207,9 +199,21 @@ export type CareerCriteriaResult = {
   criterion_name: string;
   description: string;
   score: number;
+  rule_score?: number;
   weight: number;
   feedback: string;
   matched_keywords: string[];
+  evidence_keywords?: string[];
+  keyword_score?: number;
+  specificity_score?: number;
+  material_score?: number;
+  qa_score?: number;
+  keyword_stuffing_penalty?: number;
+  llm_score?: number;
+  llm_feedback?: string;
+  llm_evidence_summary?: string;
+  llm_keyword_stuffed?: boolean;
+  llm_reviewed?: boolean;
 };
 
 export type CareerActionPlan = {
@@ -223,6 +227,12 @@ export type CareerDiagnosis = {
     name: string;
     description: string;
   };
+  source_cover_letter?: {
+    id: number;
+    title: string;
+    company_name: string | null;
+    job_group_id: number;
+  };
   desired_job: string;
   total_score: number;
   score_label: string;
@@ -231,11 +241,14 @@ export type CareerDiagnosis = {
   weaknesses: string[];
   criteria_results: CareerCriteriaResult[];
   action_plan: CareerActionPlan[];
+  llm_reviewed?: boolean;
   caution: string;
 };
 
-export const createCareerDiagnosis = async (): Promise<CareerDiagnosis> => {
-  const response = await api.post('/career/diagnosis');
+export const createCareerDiagnosis = async (payload?: {
+  cover_letter_id?: number;
+}): Promise<CareerDiagnosis> => {
+  const response = await api.post('/career/diagnosis', payload ?? {});
   return response.data;
 };
 

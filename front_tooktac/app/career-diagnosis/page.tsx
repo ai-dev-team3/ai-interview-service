@@ -23,7 +23,13 @@ export default function CareerDiagnosisPage() {
 
     const loadDiagnosis = async () => {
       try {
-        const result = await createCareerDiagnosis();
+        const storedCoverLetterId = window.sessionStorage.getItem('careerDiagnosisCoverLetterId');
+        const coverLetterId = storedCoverLetterId ? Number(storedCoverLetterId) : undefined;
+        const result = await createCareerDiagnosis(
+          coverLetterId && Number.isFinite(coverLetterId)
+            ? { cover_letter_id: coverLetterId }
+            : undefined
+        );
         if (!cancelled) {
           setDiagnosis(result);
         }
@@ -106,6 +112,14 @@ export default function CareerDiagnosisPage() {
             <p className="mt-2 text-sm text-gray-600">
               {diagnosis.desired_job || diagnosis.job_group.name} · {diagnosis.job_group.description}
             </p>
+            {diagnosis.source_cover_letter && (
+              <p className="mt-1 text-xs text-gray-500">
+                사용 자소서: {diagnosis.source_cover_letter.title}
+                {diagnosis.source_cover_letter.company_name
+                  ? ` · ${diagnosis.source_cover_letter.company_name}`
+                  : ''}
+              </p>
+            )}
           </div>
           <Link
             href="/mypage"
