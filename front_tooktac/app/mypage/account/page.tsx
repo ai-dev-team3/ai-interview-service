@@ -772,6 +772,13 @@ export default function AccountPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => router.push(`/cover-letter?id=${letter.id}`)}
+                        className="rounded-full bg-[#e7f8ff] px-3 py-1 text-xs font-medium text-[#27386d] hover:bg-[#6ce5e8]/30"
+                      >
+                        첨삭받기
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleCoverLetterDelete(letter.id)}
                         disabled={coverLetterDeletingId === letter.id}
                         className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"

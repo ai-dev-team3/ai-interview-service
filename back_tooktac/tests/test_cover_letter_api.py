@@ -161,6 +161,68 @@ def test_cover_letters_are_scoped_to_current_user(auth_client, test_user, db_ses
     assert db_session.get(CoverLetter, other_letter.id) is not None
 
 
+def test_get_cover_letter_returns_items(auth_client, test_user, db_session):
+    job_group = JobGroup(name="dev-test", description="test", is_active=True)
+    db_session.add(job_group)
+    db_session.flush()
+    cover_letter = CoverLetter(
+        user_id=test_user.id,
+        job_group_id=job_group.id,
+        title="detail cover letter",
+        company_name="Tooktac",
+        items=[
+            CoverLetterItem(sort_order=1, question_text="question one", answer_text="answer one"),
+            CoverLetterItem(sort_order=2, question_text="question two", answer_text="answer two"),
+        ],
+    )
+    db_session.add(cover_letter)
+    db_session.commit()
+
+    res = auth_client.get(f"/cover-letters/{cover_letter.id}")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["id"] == cover_letter.id
+    assert body["company_name"] == "Tooktac"
+    assert body["items"] == [
+        {"question_text": "question one", "answer_text": "answer one"},
+        {"question_text": "question two", "answer_text": "answer two"},
+    ]
+
+
+def test_get_cover_letter_missing_returns_404(auth_client):
+    res = auth_client.get("/cover-letters/999999")
+    assert res.status_code == 404
+
+
+def test_get_cover_letter_scoped_to_current_user(auth_client, test_user, db_session):
+    job_group = JobGroup(name="dev-test", description="test", is_active=True)
+    other_user = User(
+        username="other-detail",
+        password="pw1234",
+        name="다른 사용자",
+        nickname="다른",
+        email="other-detail@example.com",
+        birthdate=date(2000, 1, 1),
+        desired_job="백엔드 개발자",
+    )
+    db_session.add_all([job_group, other_user])
+    db_session.flush()
+    other_letter = CoverLetter(
+        user_id=other_user.id,
+        job_group_id=job_group.id,
+        title="other cover letter",
+        items=[
+            CoverLetterItem(sort_order=1, question_text="other question", answer_text="other answer"),
+        ],
+    )
+    db_session.add(other_letter)
+    db_session.commit()
+
+    res = auth_client.get(f"/cover-letters/{other_letter.id}")
+    assert res.status_code == 404
+
+
 def test_cover_letter_rejects_unknown_job_group(auth_client):
     res = auth_client.post(
         "/cover-letters",

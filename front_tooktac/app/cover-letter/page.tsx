@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useUser } from '@/contexts/UserContext';
-import api from '@/api/api';
+import api, { getCoverLetter } from '@/api/api';
 
 interface DraftEntry {
     id: number;
@@ -27,9 +28,12 @@ const FEEDBACK_ENDPOINT = '/cover-letter/feedback/';
 
 let nextId = 1;
 
-export default function CoverLetterPage() {
+function CoverLetterContent() {
     const { user } = useUser();
     const userNickname = user?.nickname ?? '사용자';
+
+    const searchParams = useSearchParams();
+    const coverLetterId = searchParams.get('id');
 
     const [mode, setMode] = useState<Mode>('form');
 
@@ -43,6 +47,27 @@ export default function CoverLetterPage() {
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+
+    // 마이페이지에서 등록 자소서로 넘어온 경우(?id=): 회사명/문항/답변을 채워 넣는다.
+    // 직무는 첨삭 직무 목록과 등록 직무군 체계가 달라 자동 매핑하지 않고 사용자가 고르게 둔다.
+    useEffect(() => {
+        if (!coverLetterId) return;
+        (async () => {
+            try {
+                const coverLetter = await getCoverLetter(Number(coverLetterId));
+                setCompanyName(coverLetter.company_name ?? '');
+                const loaded = coverLetter.items.map((item, index) => ({
+                    id: index,
+                    question: item.question_text,
+                    answer: item.answer_text,
+                }));
+                nextId = loaded.length;
+                setEntries(loaded.length > 0 ? loaded : [{ id: 0, question: '', answer: '' }]);
+            } catch {
+                // 로드 실패 시 빈 폼을 유지한다.
+            }
+        })();
+    }, [coverLetterId]);
 
     const toggleJob = (job: string) => {
         setSelectedJob((prev) => (prev === job ? null : job));
@@ -324,5 +349,13 @@ export default function CoverLetterPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function CoverLetterPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-white" />}>
+            <CoverLetterContent />
+        </Suspense>
     );
 }
