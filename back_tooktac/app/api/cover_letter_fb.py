@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.repository.database import get_db
-from back_tooktac.app.repository.cover_letter_fb import CoverLetterFeedback
+from app.repository.cover_letter_fb import CoverLetterFeedback
 from app.services.user.dependencies import get_current_user
 from app.services.cover_letter.feedback_service import run_cover_letter_feedback_batch
-from back_tooktac.app.schemas.cover_letter_fb import (
+from app.schemas.cover_letter_fb import (
     CoverLetterFeedbackRequest,
     CoverLetterFeedbackResponse,
     CoverLetterFeedbackUpdateRequest,
