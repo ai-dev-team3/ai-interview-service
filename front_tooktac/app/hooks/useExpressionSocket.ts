@@ -159,5 +159,6 @@ export function useExpressionSocket({
             if (interval) clearInterval(interval);
             socket.close();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- 콜백 변경으로 소켓이 재연결되지 않도록 의도적으로 생략
     }, [isAnswerActive, questionId]);
 }

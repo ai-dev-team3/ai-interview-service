@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
-import Link from 'next/link';
-import QuestionClientLoadingPage from "@/today-interview/[questionId]/QuestionClientLoadingPage";
 import { useExpressionSocket } from "@/hooks/useExpressionSocket";
 import { usePostureBenchmark } from "@/hooks/usePostureBenchmark";
 import { useWebcamPreview } from "@/hooks/useWebcamPreview";

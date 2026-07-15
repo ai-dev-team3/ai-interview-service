@@ -115,8 +115,6 @@ const CHART_COLORS = {
   white: '#ffffff'
 };
 
-// 상위 50% 평균 점수 더미 데이터 (들쑥날쑥한 변동)
-const getAverageScoresData = (n: number): number[] => [68, 71, 69, 74, 70, 73, 72].slice(0, n);
 const getPeerAverages = async (): Promise<(number|null)[]> => {
   const res = await api.get('/training/peer-averages', { params: { min_population: 5 } });
   return res.data.data as (number|null)[];
@@ -179,28 +177,28 @@ export default function TrainingHistory() {
   const userDesiredJob = user?.desired_job ?? '데이터 분석가';
 
   // 2) 상태 추가
-  const [programDay, setProgramDay] = useState<number>(0);
+  const [, setProgramDay] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
   const [trainedDays, setTrainDays] = useState<number>(0);
   const [dayIndexByDate, setDayIndexByDate] = useState<Record<string, number>>({});
 
   // 랭크 상태
   const [currentRank, setCurrentRank] = useState<number | null>(null);
-  const [bestRank, setBestRank] = useState<number | null>(null);
-  const [rankLoading, setRankLoading] = useState<boolean>(false);
-  const [rankError, setRankError] = useState<string | null>(null);
+  const [, setBestRank] = useState<number | null>(null);
+  const [, setRankLoading] = useState<boolean>(false);
+  const [, setRankError] = useState<string | null>(null);
 
   const [targetScore, setTargetScore] = useState<number>(88); // 초기값
   const [peerAverages, setPeerAverages] = useState<(number|null)[]>([]);
 
-  const [jobStatsLoading, setJobStatsLoading] = useState<boolean>(false);
-  const [jobStatsError, setJobStatsError] = useState<string | null>(null);
+  const [, setJobStatsLoading] = useState<boolean>(false);
+  const [, setJobStatsError] = useState<string | null>(null);
 
   const [jobApplicants, setJobApplicants] = useState<number | null>(null);        // 지원자 수
   const [jobRankPercent, setJobRankPercent] = useState<number | null>(null);      // 상위 %
   const [growthMultiplier, setGrowthMultiplier] = useState<number | null>(null);  // 성장 배수
-  const [myGrowthPerDay, setMyGrowthPerDay] = useState<number | null>(null);
-  const [peerAvgGrowthPerDay, setPeerAvgGrowthPerDay] = useState<number | null>(null);
+  const [, setMyGrowthPerDay] = useState<number | null>(null);
+  const [, setPeerAvgGrowthPerDay] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -227,7 +225,7 @@ export default function TrainingHistory() {
             : Object.keys(d.dayIndexByDate ?? {}).length // 백업 계산
         );
         setDayIndexByDate(d.dayIndexByDate);
-      } catch (e) {
+      } catch {
         setProgramDay(0);
         setStreak(0);
         setTrainDays(0); // 실패 시 0으로 명시 세팅
@@ -243,7 +241,7 @@ export default function TrainingHistory() {
       try {
         const arr = await getPeerAverages();    // (number|null)[] 반환
         setPeerAverages(arr);
-      } catch (e) {
+      } catch {
         setPeerAverages([]); // 실패 시 빈 배열
       }
     })();
@@ -306,9 +304,7 @@ export default function TrainingHistory() {
   }, []);
 
   // 상수
-  const CURRENT_RANK = 23;
   const TARGET_SCORE = targetScore; // 상위 12% 기준
-  const AVERAGE_SCORE = 72; // 상위 50% 기준
   const TARGET_JOB = userDesiredJob;
   const JOB_APPLICANTS = jobApplicants ?? 0;
   const JOB_CURRENT_RANK = jobRankPercent ?? 0; // 상위 10%
@@ -675,7 +671,6 @@ export default function TrainingHistory() {
   const growthAmount = weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].score - weeklyData[0].score : 0;
   const currentScore = weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].score : 0;
   const startScore = weeklyData.length > 0 ? weeklyData[0].score : 0;
-  const pointsToTarget = Math.max(0, TARGET_SCORE - currentScore);
   const consecutiveDays = 7;
 
   // 새로운 분석 함수들

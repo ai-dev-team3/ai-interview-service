@@ -41,7 +41,6 @@ export default function Header() {
 
     // ⑥ 만약 api.ts에서 Authorization: Bearer ... 를 쓰는 구조라면 헤더를 즉시 제거
     // 쿠키 인증만 쓰면 이 줄은 없어도 됩니다.
-    // @ts-ignore
     delete api.defaults?.headers?.common?.Authorization;
 
     setIsMenuOpen(false);          // ⑦ 모바일 메뉴 닫기

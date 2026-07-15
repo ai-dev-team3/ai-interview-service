@@ -91,7 +91,7 @@ export default function FinalEvaluationPage() {
     );
   }
 
-  const { evaluationData, aiAdvice } = report;
+  const { evaluationData } = report;
   const radarData = [
     { subject: '답변 내용', score: evaluationData.areaScores.text.total, fullMark: 100 },
     { subject: '음성', score: evaluationData.areaScores.voice.total, fullMark: 100 },
