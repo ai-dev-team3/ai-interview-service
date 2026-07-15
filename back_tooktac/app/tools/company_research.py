@@ -77,7 +77,7 @@ async def research_company(company_name: str, job_role: str) -> CompanyResearchR
     job_role = job_role.strip()
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash",
+        model="gemini-2.5-flash",
         google_api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0,
     )
