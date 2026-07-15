@@ -29,6 +29,18 @@ def list_cover_letters(
     return [_serialize_cover_letter(row) for row in rows]
 
 
+@router.get("/{cover_letter_id}")
+def get_cover_letter(
+    cover_letter_id: int,
+    db: Session = Depends(get_db),
+    user_id=Depends(get_current_user),
+):
+    cover_letter = cover_letter_service.get_cover_letter(db, user_id, cover_letter_id)
+    if cover_letter is None:
+        raise HTTPException(status_code=404, detail="자소서를 찾을 수 없습니다.")
+    return _serialize_cover_letter(cover_letter)
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_cover_letter(
     question_text: list[str] = Form(...),

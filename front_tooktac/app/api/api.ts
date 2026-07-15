@@ -152,6 +152,11 @@ export const getCoverLetters = async (): Promise<CoverLetter[]> => {
   return response.data;
 };
 
+export const getCoverLetter = async (id: number): Promise<CoverLetter> => {
+  const response = await api.get(`/cover-letters/${id}`);
+  return response.data;
+};
+
 type CoverLetterPayload = {
   job_group_id: number;
   title?: string;
