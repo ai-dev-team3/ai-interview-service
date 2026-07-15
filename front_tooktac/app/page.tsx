@@ -25,8 +25,8 @@ export default function HomePage() {
     requireLogin(() => router.push('/practice-interview'));
   };
 
-  const handleMyPage = () => {
-    requireLogin(() => router.push('/mypage'));
+  const handleCoverLetter = () => {
+    requireLogin(() => router.push('/cover-letter'));
   };
 
   return (
@@ -75,7 +75,7 @@ export default function HomePage() {
                 <span className="tracking-[0.04em]">나올 때까지</span>
               </h1>
 
-              <p className="text-2xl text-gray-700 mt-16 mb-0" // mb-24 -> mb-0으로 수정
+              <p className="text-2xl text-gray-700 mt-16 mb-0"
                  style={{textShadow: '2px 2px 6px rgba(39, 56, 109, 0.3)'}}
               >
                 매일 12분, AI 기반 맞춤 피드백으로<br/>
@@ -123,7 +123,7 @@ export default function HomePage() {
               </button>
 
               <button
-                  onClick={handleMyPage}
+                  onClick={handleCoverLetter}
                   className="group relative overflow-hidden bg-white rounded-3xl shadow-lg hover:shadow-xl transition-all duration-300 p-8 w-80 h-64 flex flex-col items-center justify-center text-center cursor-pointer hover:-translate-y-2"
               >
                 <div
@@ -131,12 +131,12 @@ export default function HomePage() {
                 <div className="relative z-10">
                   <div
                       className="w-20 h-20 bg-gradient-to-r from-[#6ce5e8] to-[#27386d] rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                    <i className="ri-user-line text-3xl text-white"></i>
+                    <i className="ri-file-edit-line text-3xl text-white"></i>
                   </div>
-                  <h2 className="text-2xl font-bold text-[#27386d] mb-4">마이페이지</h2>
+                  <h2 className="text-2xl font-bold text-[#27386d] mb-4">자소서 첨삭</h2>
                   <p className="text-gray-600 leading-relaxed">
-                    나의 면접 실력 향상 과정과<br/>
-                    훈련 기록 확인하기
+                    AI가 분석하는<br/>
+                    맞춤형 자기소개서 첨삭
                   </p>
                 </div>
               </button>
