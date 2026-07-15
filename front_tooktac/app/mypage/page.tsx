@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api, {
+  getCoverLetters,
   getResumeStatus,
   getInterviewSchedules,
   createInterviewSchedule,
   updateInterviewSchedule,
   deleteInterviewSchedule,
+  type CoverLetter,
   type InterviewSchedule,
 } from '@/api/api';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -83,23 +85,41 @@ export default function MyPage() {
   // 이력서 등록 상태
   const [hasResume, setHasResume] = useState<boolean | null>(null);
   const [hasCoverLetter, setHasCoverLetter] = useState<boolean | null>(null);
+  const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([]);
+  const [selectedCoverLetterId, setSelectedCoverLetterId] = useState('');
   const [careerChecking, setCareerChecking] = useState(false);
   const [toast, setToast] = useState('');
   const careerSectionRef = useRef<HTMLDivElement>(null);
+  const selectedCoverLetter = useMemo(
+    () => coverLetters.find(letter => String(letter.id) === selectedCoverLetterId) ?? null,
+    [coverLetters, selectedCoverLetterId]
+  );
 
-  // 이력서 등록 여부 로드
+  // 이력서/자소서 등록 여부 로드
   useEffect(() => {
-    const loadResumeStatus = async () => {
+    const loadReadinessData = async () => {
       try {
-        const d = await getResumeStatus();
+        const [d, letters] = await Promise.all([
+          getResumeStatus(),
+          getCoverLetters(),
+        ]);
         setHasResume(d.has_resume);
-        setHasCoverLetter(d.has_cover_letter);
+        setHasCoverLetter(letters.length > 0);
+        setCoverLetters(letters);
+        setSelectedCoverLetterId(prev => {
+          if (prev && letters.some(letter => String(letter.id) === prev)) {
+            return prev;
+          }
+          return letters[0] ? String(letters[0].id) : '';
+        });
       } catch {
         setHasResume(null);
         setHasCoverLetter(null);
+        setCoverLetters([]);
+        setSelectedCoverLetterId('');
       }
     };
-    loadResumeStatus();
+    loadReadinessData();
   }, []);
 
   // 가드 리다이렉트(?resume=required)로 진입한 경우 안내 + 준비 자료 상태로 스크롤
@@ -131,6 +151,14 @@ export default function MyPage() {
         return;
       }
 
+      const coverLetterId = Number(selectedCoverLetterId);
+      if (!coverLetterId || !Number.isFinite(coverLetterId)) {
+        alert('진단에 사용할 자소서를 선택해주세요.');
+        setTimeout(() => careerSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        return;
+      }
+
+      window.sessionStorage.setItem('careerDiagnosisCoverLetterId', String(coverLetterId));
       router.push('/career-diagnosis');
     } catch (err: any) {
       if (err?.response?.status === 401) {
@@ -422,50 +450,101 @@ export default function MyPage() {
         </div>
 
         <div className="grid gap-6 mb-8">
+          {/* 이력서 / 자소서 관리 */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm">
+            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#e7f8ff] text-[#27386d]">
+                  <i className="ri-file-user-line text-2xl" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-[#27386d]">이력서/자소서 관리</h2>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">
+                    면접과 취업 준비도 진단에 사용할 이력서와 자기소개서를 등록하고 수정합니다.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/mypage/account"
+                className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#27386d] px-5 text-sm font-semibold text-white transition-colors hover:bg-opacity-90 whitespace-nowrap"
+              >
+                <i className="ri-file-edit-line mr-2 text-base leading-none" />
+                이력서/자소서 관리
+              </Link>
+            </div>
+          </div>
+
           {/* 취업 준비도 진단 */}
           <div ref={careerSectionRef} className="bg-white rounded-2xl p-6 shadow-sm">
-            <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div className="flex min-w-0 items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#27386d] text-white">
+                <i className="ri-bar-chart-box-line text-2xl" />
+              </div>
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-[#27386d]">AI 취업 준비도 진단</h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  이력서와 자기소개서 등록 상태를 확인하고 취업 준비도 진단으로 이동합니다.
+                <p className="mt-1 text-sm leading-6 text-gray-600">
+                  등록된 이력서와 선택한 자기소개서를 바탕으로 취업 준비도와 보완 액션을 확인합니다.
                 </p>
               </div>
-              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-[minmax(190px,1.15fr)_minmax(150px,0.85fr)] lg:w-[390px]">
-                <Link
-                  href="/mypage/account"
-                  className="inline-flex h-11 min-w-0 items-center justify-center rounded-full border border-[#27386d] px-4 text-sm font-semibold text-[#27386d] transition-colors hover:bg-[#f5fbff] whitespace-nowrap"
-                >
-                  <i className="ri-file-user-line mr-2 text-base leading-none" />
-                  <span>이력서/자소서 관리</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleCareerReadinessClick}
-                  disabled={careerChecking}
-                  className="inline-flex h-11 min-w-0 items-center justify-center rounded-full bg-[#27386d] px-4 text-sm font-semibold text-white transition-colors hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60 whitespace-nowrap"
-                >
-                  <i className="ri-bar-chart-box-line mr-2 text-base leading-none" />
-                  <span>{careerChecking ? '확인 중...' : '준비도 확인'}</span>
-                </button>
-              </div>
             </div>
+
+            <div className="mt-5 grid gap-3 border-t border-gray-100 pt-5 md:grid-cols-[minmax(0,1fr)_160px] md:items-end">
+              <label className="min-w-0">
+                <span className="mb-2 block text-sm font-semibold text-[#27386d]">
+                  진단에 사용할 자소서
+                </span>
+                <div className="relative">
+                  <i className="ri-file-list-3-line pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base text-gray-400" />
+                  <select
+                    value={selectedCoverLetterId}
+                    onChange={(e) => setSelectedCoverLetterId(e.target.value)}
+                    disabled={careerChecking || coverLetters.length === 0}
+                    className="h-11 w-full min-w-0 rounded-full border border-gray-200 bg-white pl-11 pr-4 text-sm font-semibold text-[#27386d] outline-none transition-colors focus:border-[#27386d] focus:ring-2 focus:ring-[#e7f8ff] disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                  >
+                    {coverLetters.length === 0 ? (
+                      <option value="">등록된 자소서가 없습니다</option>
+                    ) : (
+                      coverLetters.map((letter) => (
+                        <option key={letter.id} value={letter.id}>
+                          {letter.title}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              </label>
+              <button
+                type="button"
+                onClick={handleCareerReadinessClick}
+                disabled={careerChecking}
+                className="inline-flex h-11 min-w-0 items-center justify-center rounded-full bg-[#27386d] px-5 text-sm font-semibold text-white transition-colors hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-60 whitespace-nowrap"
+              >
+                <i className="ri-arrow-right-circle-line mr-2 text-base leading-none" />
+                <span>{careerChecking ? '확인 중...' : '준비도 확인'}</span>
+              </button>
+            </div>
+
             <div className="mt-4 flex flex-wrap gap-2">
               <span
                 className={`px-3 py-1 rounded-full text-sm font-medium ${
                   hasResume ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                 }`}
               >
-                이력서 {hasResume ? '등록됨' : '미등록'}
+                이력서 {hasResume ? '준비 완료' : '필요'}
               </span>
               <span
                 className={`px-3 py-1 rounded-full text-sm font-medium ${
                   hasCoverLetter ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                 }`}
               >
-                자소서 {hasCoverLetter ? '등록됨' : '미등록'}
+                자소서 {hasCoverLetter ? '선택 가능' : '필요'}
               </span>
             </div>
+            <p className="mt-3 text-sm text-gray-600">
+              {selectedCoverLetter
+                ? `선택된 자소서: ${selectedCoverLetter.title}`
+                : '자소서를 등록하면 이곳에서 진단에 사용할 항목을 선택할 수 있습니다.'}
+            </p>
           </div>
 
           {/* 다음 면접 예정일 */}
@@ -533,7 +612,7 @@ export default function MyPage() {
               <div>
                 <h2 className="text-lg font-semibold text-[#27386d]">계정 관리</h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  이력서와 자소서 등록, 아이디 확인, 비밀번호 변경, 회원 탈퇴를 관리합니다.
+                  아이디 확인, 비밀번호 변경, 회원 탈퇴를 관리합니다.
                 </p>
               </div>
               <Link

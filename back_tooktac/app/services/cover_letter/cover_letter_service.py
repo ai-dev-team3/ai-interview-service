@@ -128,6 +128,14 @@ def list_cover_letters(db: Session, user_id: int) -> list[CoverLetter]:
     )
 
 
+def get_cover_letter(db: Session, user_id: int, cover_letter_id: int) -> CoverLetter | None:
+    return (
+        db.query(CoverLetter)
+        .filter(CoverLetter.id == cover_letter_id, CoverLetter.user_id == user_id)
+        .first()
+    )
+
+
 def get_latest_cover_letter(db: Session, user_id: int) -> CoverLetter | None:
     return (
         db.query(CoverLetter)

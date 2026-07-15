@@ -20,25 +20,31 @@ from app.services.stt import sensevoice
 from app.services.stt.sensevoice import SAMPLE_RATE, SenseVoiceClient, _strip_tags
 
 
-class FakeVad:
-    """발화 구간을 ms 단위로 돌려준다 (침묵은 빠져 있다)"""
+class FakeVadModel:
+    """asr.vad_model 흉내. inference 가 (results, meta) 를 돌려준다 (실제 계약과 동일)."""
 
     def __init__(self, spans):
         self.spans = spans
 
-    def generate(self, input, fs):  # noqa: A002
-        return [{"value": [list(s) for s in self.spans]}]
+    def inference(self, *args, **kwargs):
+        return [{"key": "x", "value": [list(s) for s in self.spans]}], {}
 
 
 class FakeAsr:
-    """구간마다 순서대로 텍스트를 돌려준다"""
+    """구간마다 순서대로 텍스트를 돌려준다.
 
-    def __init__(self, texts):
+    실제 asr.generate 처럼 내부에서 vad_model.inference 를 부른다 — 그래야 capture
+    wrapper 가 발화 구간을 주워 간다.
+    """
+
+    def __init__(self, texts, spans):
         self.texts = list(texts)
+        self.vad_model = FakeVadModel(spans)
         self.calls = []
 
     def generate(self, input, fs, **kwargs):  # noqa: A002
         self.calls.append(len(input))
+        self.vad_model.inference(input)  # 내부 VAD 호출 (wrapper 가 여기서 구간을 가로챈다)
         return [{"text": self.texts.pop(0) if self.texts else ""}]
 
 
@@ -50,8 +56,8 @@ def audio(monkeypatch):
     return samples
 
 
-def _use(monkeypatch, vad, asr):
-    monkeypatch.setattr(sensevoice, "get_models", lambda: (vad, asr))
+def _use(monkeypatch, asr):
+    monkeypatch.setattr(sensevoice, "get_models", lambda: asr)
 
 
 def test_텍스트는_통짜로_발화시간은_VAD로(monkeypatch, audio):
@@ -60,9 +66,9 @@ def test_텍스트는_통짜로_발화시간은_VAD로(monkeypatch, audio):
     ("그러 한 일 들 을 잘 처리 해낼 수 있 기" — 실측)
     이 텍스트가 그대로 LLM 평가에 들어가므로 통짜로 추론해야 한다.
     """
-    vad = FakeVad([(0, 2000), (3000, 5000)])  # 사이 1초는 침묵
-    asr = FakeAsr(["<|ko|><|NEUTRAL|><|Speech|>안녕하세요 반갑습니다"])
-    _use(monkeypatch, vad, asr)
+    # 사이 1초는 침묵. 발화 구간은 asr 내부 VAD 가 낸 값을 가로채 쓴다.
+    asr = FakeAsr(["<|ko|><|NEUTRAL|><|Speech|>안녕하세요 반갑습니다"], [(0, 2000), (3000, 5000)])
+    _use(monkeypatch, asr)
 
     text, raw = SenseVoiceClient().transcribe("dummy.wav")
 
@@ -78,9 +84,8 @@ def test_텍스트는_통짜로_발화시간은_VAD로(monkeypatch, audio):
 
 def test_말속도가_침묵을_빼고_계산된다(monkeypatch, audio):
     """SpeechAnalyzer 가 Clova 때와 똑같이 읽는지 — 이게 교체의 핵심 조건이다."""
-    vad = FakeVad([(0, 2000), (3000, 5000)])
-    asr = FakeAsr(["안녕하세요 반갑습니다"])
-    _use(monkeypatch, vad, asr)
+    asr = FakeAsr(["안녕하세요 반갑습니다"], [(0, 2000), (3000, 5000)])
+    _use(monkeypatch, asr)
 
     _, raw = SenseVoiceClient().transcribe("dummy.wav")
     speed = SpeechAnalyzer(raw).speech_speed_calculate()
@@ -92,9 +97,8 @@ def test_말속도가_침묵을_빼고_계산된다(monkeypatch, audio):
 
 def test_VAD가_발화를_못_찾아도_텍스트는_건진다(monkeypatch, audio):
     """말속도는 포기하더라도 텍스트 평가와 꼬리질문은 살아야 한다."""
-    vad = FakeVad([])
-    asr = FakeAsr(["전체 텍스트"])
-    _use(monkeypatch, vad, asr)
+    asr = FakeAsr(["전체 텍스트"], [])
+    _use(monkeypatch, asr)
 
     text, raw = SenseVoiceClient().transcribe("dummy.wav")
 
@@ -104,7 +108,7 @@ def test_VAD가_발화를_못_찾아도_텍스트는_건진다(monkeypatch, audi
 
 
 def test_무음이면_빈_결과(monkeypatch, audio):
-    _use(monkeypatch, FakeVad([]), FakeAsr([""]))
+    _use(monkeypatch, FakeAsr([""], []))
 
     text, raw = SenseVoiceClient().transcribe("dummy.wav")
 
@@ -133,6 +137,9 @@ def test_동시_추론은_세마포어로_제한된다(monkeypatch, audio):
     lock = threading.Lock()
 
     class SlowAsr:
+        def __init__(self):
+            self.vad_model = FakeVadModel([(0, 1000)])
+
         def generate(self, input, fs, **kwargs):  # noqa: A002
             nonlocal peak, running
             with lock:
@@ -141,9 +148,10 @@ def test_동시_추론은_세마포어로_제한된다(monkeypatch, audio):
             threading.Event().wait(0.05)
             with lock:
                 running -= 1
+            self.vad_model.inference(input)
             return [{"text": "응답"}]
 
-    _use(monkeypatch, FakeVad([(0, 1000)]), SlowAsr())
+    _use(monkeypatch, SlowAsr())
     monkeypatch.setattr(sensevoice, "_INFERENCE_SLOTS", threading.Semaphore(2))
 
     threads = [
