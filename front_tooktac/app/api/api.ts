@@ -199,6 +199,7 @@ export type CareerCriteriaResult = {
   criterion_name: string;
   description: string;
   score: number;
+  raw_score?: number;
   rule_score?: number;
   weight: number;
   feedback: string;
@@ -209,7 +210,12 @@ export type CareerCriteriaResult = {
   material_score?: number;
   qa_score?: number;
   keyword_stuffing_penalty?: number;
+  criterion_cap?: number;
+  job_fit_cap?: number;
+  job_fit_capped?: boolean;
   llm_score?: number;
+  llm_raw_score?: number;
+  llm_score_cap?: number;
   llm_feedback?: string;
   llm_evidence_summary?: string;
   llm_keyword_stuffed?: boolean;
@@ -241,6 +247,16 @@ export type CareerDiagnosis = {
   weaknesses: string[];
   criteria_results: CareerCriteriaResult[];
   action_plan: CareerActionPlan[];
+  job_fit?: {
+    score: number;
+    cap: number;
+    matched_keywords: string[];
+    evidence_keywords: string[];
+    competing_keywords: string[];
+    feedback: string;
+  };
+  evaluation_available?: boolean;
+  unavailable_reasons?: string[];
   llm_reviewed?: boolean;
   caution: string;
 };
