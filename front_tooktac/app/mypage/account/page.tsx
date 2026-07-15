@@ -421,7 +421,6 @@ export default function AccountPage() {
       clearUser();
       setIsLoggedIn(false);
       localStorage.setItem('auth:event', 'logout');
-      // @ts-ignore
       delete api.defaults?.headers?.common?.Authorization;
       router.replace('/');
     } catch (err: any) {

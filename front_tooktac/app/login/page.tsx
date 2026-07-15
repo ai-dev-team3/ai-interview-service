@@ -36,7 +36,7 @@ export default function LoginPage() {
 
       setIsLoggedIn(true);      // ✅ 전역 상태 변경
       router.push('/');
-    } catch (err) {
+    } catch {
       alert('로그인 실패: 아이디 또는 비밀번호가 올바르지 않습니다.');
     }
   };

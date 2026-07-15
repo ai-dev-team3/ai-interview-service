@@ -35,7 +35,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoggedIn(false);                                 // 전역 로그인 플래그 false
     localStorage.setItem('auth:event', 'logout');         // 다중 탭 동기화
     // Bearer 헤더를 사용하는 프로젝트라면 즉시 제거(쿠키 인증만 사용 시 생략 가능)
-    // @ts-ignore
     delete api.defaults?.headers?.common?.Authorization;
   }, []);
 

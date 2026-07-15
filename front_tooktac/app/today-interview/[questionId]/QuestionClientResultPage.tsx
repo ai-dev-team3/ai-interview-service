@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { buildSteps } from '@/lib/steps';
 
 type EvaluationResult = {
@@ -41,7 +41,6 @@ export default function QuestionClientResultPage({ result, nextLink, totalQuesti
     const searchParams = useSearchParams()
     const questionFromParam = searchParams.get('question')
     const question = questionFromParam || result?.question || '질문';
-    const questionId = searchParams.get('questionId');
     const isFinalStep = nextLink?.startsWith('/today-interview/final-report');
     let currentStep = 1;
     if (isFinalStep) {
@@ -69,29 +68,6 @@ export default function QuestionClientResultPage({ result, nextLink, totalQuesti
         shoulderWarnings: result.video?.shoulder_warning ?? 0,
         handWarnings: result.video?.hand_warning ?? 0
     };
-    const TrafficLight = ({ options, current }: { options: string[], current: string }) => {
-        const getColor = (option: string) => {
-            if (option !== current) return 'bg-gray-300';
-
-            // 색상 매핑
-            if (['적절', '매끄러움', '밝음'].includes(option)) return 'bg-green-500';
-            if (['무난', '단조로움', '과장됨'].includes(option)) return 'bg-yellow-500';
-            if (['느림', '빠름', '버벅거림'].includes(option)) return 'bg-red-500';
-            return 'bg-gray-300';
-        };
-
-        return (
-            <div className="flex justify-center space-x-1">
-                {options.map((option, index) => (
-                    <div
-                        key={index}
-                        className={`w-3 h-3 rounded-full ${getColor(option)}`}
-                    />
-                ))}
-            </div>
-        );
-    };
-
     // 속도 게이지 컴포넌트
     const SpeedGauge = ({ value }: { value: string }) => {
         const getAngle = (speed: string) => {
@@ -198,12 +174,12 @@ export default function QuestionClientResultPage({ result, nextLink, totalQuesti
             return [12, 25, 15, 30, 18, 28, 22];
         };
 
-        const getColor = (tone: string) => {
+        const getColor = () => {
             return '#6ce5e8';
         };
 
         const bars = getBars(value);
-        const color = getColor(value);
+        const color = getColor();
 
         return (
             <div className="flex flex-col items-center h-16 justify-center">

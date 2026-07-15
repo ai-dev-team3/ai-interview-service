@@ -52,7 +52,7 @@ export default function MyPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // API에서 가져오는 카운터들
-  const [programDay, setProgramDay] = useState<number>(0);
+  const [, setProgramDay] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
   const [trainedDays, setTrainDays] = useState<number>(0);
   const [dayIndexByDate, setDayIndexByDate] = useState<Record<string, number>>({});
@@ -323,7 +323,7 @@ export default function MyPage() {
       isInterviewDay: boolean;
     }[][] = [];
 
-    let cursor = new Date(start);
+    const cursor = new Date(start);
     while (cursor <= end) {
       const week = [];
       for (let i = 0; i < 7; i++) {

@@ -7,7 +7,7 @@ import { useUser } from '@/contexts/UserContext';
 import { MAX_INTERVIEW_QUESTIONS, buildSteps } from '@/lib/steps';
 
 export default function IcebreakingPage() {
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep] = useState(0);
   const [selectedQuestion, setSelectedQuestion] = useState('');
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
@@ -175,7 +175,7 @@ export default function IcebreakingPage() {
                           </p>
                           <div className="bg-[#e7f8ff] rounded-lg p-6">
                             <p className="text-[#27386d] font-medium text-left">
-                              질문 예시: "회사에 지원하게 된 동기는 무엇인가요?"
+                              질문 예시: &ldquo;회사에 지원하게 된 동기는 무엇인가요?&rdquo;
                             </p>
                           </div>
                         </div>
