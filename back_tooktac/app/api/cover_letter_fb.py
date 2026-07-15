@@ -16,7 +16,7 @@ from back_tooktac.app.schemas.cover_letter_fb import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/cover-letter/feedback", tags=["cover-letters"])
+router = APIRouter(prefix="/cover-letter/feedback", tags=["cover-letter-feedback"])
 
 
 @router.post("/", response_model=CoverLetterFeedbackResponse)
