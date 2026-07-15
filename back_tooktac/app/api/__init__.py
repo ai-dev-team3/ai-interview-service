@@ -22,6 +22,7 @@ _ROUTER_MODULES = {
     "interview_schedule_router": ".interview_schedule",
     "career_router": ".career",
     "cover_letter_router": ".cover_letter",
+    "cover_letter_fb_router": ".cover_letter_fb",
 }
 
 __all__ = list(_ROUTER_MODULES)
