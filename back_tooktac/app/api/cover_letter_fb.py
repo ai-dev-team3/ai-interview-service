@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.repository.database import get_db
@@ -10,6 +10,7 @@ from app.services.cover_letter.feedback_service import run_cover_letter_feedback
 from back_tooktac.app.schemas.cover_letter_fb import (
     CoverLetterFeedbackRequest,
     CoverLetterFeedbackResponse,
+    CoverLetterFeedbackUpdateRequest,
     CoverLetterFeedbackHistoryOut,
 )
 
@@ -36,7 +37,7 @@ async def create_feedback(
         entries=[entry.model_dump() for entry in request.entries],
     )
 
-    # 2) 문항마다 DB row 저장
+    # 2) 문항마다 DB row 저장 (existing_answer는 원본, revised_answer는 AI 재작성본)
     saved_rows = []
     for result in results:
         row = CoverLetterFeedback(
@@ -46,6 +47,7 @@ async def create_feedback(
             question_type=result["question_type"],
             question_text=result["question_text"],
             existing_answer=result["existing_answer"],
+            revised_answer=result["revised_answer"],
             agent_used=result["agent_used"],
             feedback=result["feedback"],
         )
@@ -59,6 +61,37 @@ async def create_feedback(
     logger.info("자소서 첨삭 완료: user_id=%s, 처리 문항 수=%d", user_id, len(saved_rows))
 
     return {"items": saved_rows}
+
+
+@router.patch("/", response_model=CoverLetterFeedbackResponse)
+def update_feedback(
+    request: CoverLetterFeedbackUpdateRequest,
+    db: Session = Depends(get_db),
+    user_id=Depends(get_current_user),
+):
+    """사용자가 결과 화면에서 답변을 더 수정한 뒤 '저장'을 눌렀을 때 revised_answer를 갱신합니다."""
+    updated_rows = []
+    for item in request.items:
+        row = (
+            db.query(CoverLetterFeedback)
+            .filter(
+                CoverLetterFeedback.id == item.id,
+                CoverLetterFeedback.user_id == user_id,
+            )
+            .first()
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"id={item.id} 항목을 찾을 수 없습니다.")
+        row.revised_answer = item.revised_answer
+        updated_rows.append(row)
+
+    db.commit()
+    for row in updated_rows:
+        db.refresh(row)
+
+    logger.info("자소서 답변 저장 완료: user_id=%s, 수정 문항 수=%d", user_id, len(updated_rows))
+
+    return {"items": updated_rows}
 
 
 @router.get("/me", response_model=list[CoverLetterFeedbackHistoryOut])

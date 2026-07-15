@@ -4,7 +4,7 @@
 
 흐름:
     1. 기업 리서치는 요청당 한 번만 실행 (company_name, job_role 기준)
-    2. 문항마다: 트리아지로 유형 분류 → 해당 specialist agent 실행
+    2. 문항마다: 트리아지로 유형 분류 → 해당 specialist agent 실행 (revised_answer + feedback 반환)
     3. 문항 리스트는 asyncio.gather로 병렬 처리
 
 router(api/routes/cover_letter.py)는 이제 async def이므로, 여기서는 asyncio.run() 브릿지가
@@ -64,8 +64,8 @@ async def _process_single_entry(
     )
 
     logger.info(
-        "%s 첨삭 완료: type=%s, feedback_length=%d",
-        agent_cls.__name__, question_type, len(result.get("feedback", "")),
+        "%s 첨삭 완료: type=%s, revised_answer_length=%d",
+        agent_cls.__name__, question_type, len(result.get("revised_answer", "")),
     )
 
     return {
@@ -73,6 +73,7 @@ async def _process_single_entry(
         "existing_answer": existing_answer,
         "question_type": question_type,
         "agent_used": result["agent_used"],
+        "revised_answer": result["revised_answer"],
         "feedback": result["feedback"],
     }
 
@@ -87,7 +88,8 @@ async def run_cover_letter_feedback_batch(
     기업 리서치를 한 번 수행한 뒤, 문항별로 트리아지→specialist agent 첨삭을 병렬 실행합니다.
 
     Returns:
-        문항마다 {"question_text", "existing_answer", "question_type", "agent_used", "feedback"}
+        문항마다 {"question_text", "existing_answer", "question_type", "agent_used",
+                  "revised_answer", "feedback"}
     """
     logger.info("기업 리서치 시작: company=%s, job_role=%s, 문항 수=%d", company_name, job_role, len(entries))
     company_info = await research_company(company_name, job_role)

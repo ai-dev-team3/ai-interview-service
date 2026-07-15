@@ -15,3 +15,6 @@ from app.repository import interview as _interview_module     # noqa: F401
 from app.repository import analysis as _analysis_module       # noqa: F401
 from app.repository import report as _report_module           # noqa: F401
 from app.repository import career as _career_module           # noqa: F401
+from app.repository import career as _career_module           # noqa: F401
+from app.repository import cover_letter_fb as _cover_letter_fb_module  # noqa: F401 
+    

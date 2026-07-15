@@ -1,52 +1,27 @@
-"""자소서 첨삭 요청/조회 API 스키마."""
-from datetime import datetime
-from typing import List
-from pydantic import BaseModel, ConfigDict, Field
+# app/repository/cover_letter.py
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, TIMESTAMP
+from sqlalchemy.orm import relationship
+from app.repository.database import Base
+from datetime import datetime, timezone
 
 
-class CoverLetterEntryRequest(BaseModel):
-    question_text: str
-    existing_answer: str
+class CoverLetterFeedback(Base):
+    __tablename__ = "cover_letter_feedback"
 
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
 
-class CoverLetterFeedbackRequest(BaseModel):
-    company_name: str = Field(max_length=100)
-    job_role: str
-    entries: List[CoverLetterEntryRequest]
+    company_name = Column(String(100), nullable=False)
+    job_role = Column(String(100), nullable=False)
+    question_type = Column(String(50), nullable=False)
+    question_text = Column(Text, nullable=False)
+    existing_answer = Column(Text, nullable=False)
+    revised_answer = Column(Text, nullable=False)
 
+    agent_used = Column(String(50), nullable=False)
+    feedback = Column(Text, nullable=False)
 
-class CoverLetterFeedbackItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    id: int
-    company_name: str
-    job_role: str
-    question_type: str
-    question_text: str
-    existing_answer: str
-    agent_used: str
-    feedback: str
-    created_at: datetime
-
-
-class CoverLetterFeedbackResponse(BaseModel):
-    items: List[CoverLetterFeedbackItem]
-
-
-class CoverLetterFeedbackHistoryOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    company_name: str
-    job_role: str
-    question_type: str
-    agent_used: str
-    feedback: str
-    created_at: datetime
-
-
-class CoverLetterHistoryListResponse(BaseModel):
-    items: List[CoverLetterFeedbackHistoryOut]
-    total: int
-    page: int
-    size: int
+    # 관계 설정
+    user = relationship("User", back_populates="cover_letter_feedbacks")
