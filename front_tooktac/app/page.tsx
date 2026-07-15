@@ -133,7 +133,7 @@ export default function HomePage() {
                       className="w-20 h-20 bg-gradient-to-r from-[#6ce5e8] to-[#27386d] rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
                     <i className="ri-file-edit-line text-3xl text-white"></i>
                   </div>
-                  <h2 className="text-2xl font-bold text-[#27386d] mb-4">자소서첨삭</h2>
+                  <h2 className="text-2xl font-bold text-[#27386d] mb-4">자소서 첨삭</h2>
                   <p className="text-gray-600 leading-relaxed">
                     AI가 분석하는<br/>
                     맞춤형 자기소개서 첨삭
