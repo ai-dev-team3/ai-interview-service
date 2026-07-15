@@ -43,9 +43,39 @@ MAX_SEGMENT_MS = 30000
 # 넘으면 대기한다 — 죽는 것보다 몇 초 늦는 게 낫다.
 MAX_CONCURRENT_INFERENCE = int(os.getenv("SENSEVOICE_MAX_CONCURRENCY", "2"))
 
-_MODELS: Optional[tuple] = None  # (vad, asr)
+_MODELS = None  # asr (내부에 VAD 내장)
 _MODEL_LOCK = threading.Lock()
 _INFERENCE_SLOTS = threading.Semaphore(MAX_CONCURRENT_INFERENCE)
+
+# asr.generate 가 내부에서 돌린 VAD 의 발화 구간을 담는다. asr 객체 하나를 동시에 여러
+# 스레드가 쓰므로(_INFERENCE_SLOTS) 반드시 스레드별로 따로 담아야 한다.
+_captured = threading.local()
+_CAPTURE_FLAG = "_sv_capture_installed"
+
+
+def _ensure_capture_installed(asr) -> None:
+    """asr.vad_model.inference 를 한 번만 감싸, 그 발화 구간을 _captured 에 기록한다.
+
+    SenseVoice 는 타임스탬프를 내지 않아 말속도용 발화 구간을 따로 얻어야 한다. 예전엔
+    같은 오디오에 VAD 를 한 번 더 돌렸는데(전체 STT 의 약 21%), 그 구간은 asr 가 내부에서
+    이미 계산해 버리고 있었다. 여기서 그 값을 주워오면 두 번째 패스가 통째로 사라진다.
+    """
+    if getattr(asr, _CAPTURE_FLAG, False):
+        return
+
+    original = asr.vad_model.inference
+
+    def capture(*args, **kwargs):
+        out = original(*args, **kwargs)
+        try:
+            results = out[0]  # (results, meta) 튜플. results[0]["value"] = [[start_ms, end_ms], ...]
+            _captured.spans = [(int(s), int(e)) for s, e in results[0]["value"]]
+        except (IndexError, KeyError, TypeError, ValueError):
+            _captured.spans = []
+        return out
+
+    asr.vad_model.inference = capture
+    setattr(asr, _CAPTURE_FLAG, True)
 
 
 def _device() -> str:
@@ -62,7 +92,12 @@ def _device() -> str:
 
 
 def get_models():
-    """모델은 프로세스당 한 번만 올린다 (로드 수 초, 첫 실행이면 다운로드)."""
+    """모델은 프로세스당 한 번만 올린다 (로드 수 초, 첫 실행이면 다운로드).
+
+    asr 하나만 올린다. vad_model 을 붙여 두면 내부에서 알아서 끊어 추론하고 결과를
+    합쳐 준다 — 이때 텍스트가 가장 깨끗하고, 그 과정에서 계산되는 발화 구간을
+    _ensure_capture_installed 로 주워 쓴다. 별도 VAD 모델을 따로 올리지 않는다.
+    """
     global _MODELS
     if _MODELS is None:
         with _MODEL_LOCK:
@@ -71,15 +106,6 @@ def get_models():
 
                 device = _device()
                 started = time.perf_counter()
-                # 발화 구간(길이)만 얻는 용도
-                vad = AutoModel(
-                    model="fsmn-vad",
-                    vad_kwargs={"max_single_segment_time": MAX_SEGMENT_MS},
-                    device=device,
-                    disable_update=True,
-                )
-                # 텍스트 용도. vad_model을 붙여야 내부에서 알아서 끊어 추론하고
-                # 결과를 합쳐준다 — 이때 텍스트가 가장 깨끗하다.
                 asr = AutoModel(
                     model="iic/SenseVoiceSmall",
                     vad_model="fsmn-vad",
@@ -87,7 +113,8 @@ def get_models():
                     device=device,
                     disable_update=True,
                 )
-                _MODELS = (vad, asr)
+                _ensure_capture_installed(asr)
+                _MODELS = asr
                 logger.info(
                     "SenseVoice 모델 로드 완료 (%.1f초, device=%s)",
                     time.perf_counter() - started, device,
@@ -109,14 +136,16 @@ class SenseVoiceClient:
     def transcribe(self, wav_path: str) -> Tuple[str, dict]:
         import librosa
 
-        vad, asr = get_models()
+        asr = get_models()
+        _ensure_capture_installed(asr)  # get_models 가 mock 된 테스트 경로까지 커버
         audio, _ = librosa.load(wav_path, sr=SAMPLE_RATE)
 
         queued = time.perf_counter()
         with _INFERENCE_SLOTS:
             waited_ms = (time.perf_counter() - queued) * 1000
             started = time.perf_counter()
-            segments = self._transcribe_segments(vad, asr, audio)
+            _captured.spans = []  # 이전 호출 값이 남지 않게 초기화
+            segments = self._transcribe_segments(asr, audio)
             inference_ms = (time.perf_counter() - started) * 1000
 
         text = " ".join(seg["text"] for seg in segments if seg["text"]).strip()
@@ -129,7 +158,7 @@ class SenseVoiceClient:
         )
         return text, {"segments": segments}
 
-    def _transcribe_segments(self, vad, asr, audio) -> list[dict]:
+    def _transcribe_segments(self, asr, audio) -> list[dict]:
         """SpeechAnalyzer가 읽을 segments를 만든다.
 
         SpeechAnalyzer는 segments에서 딱 두 가지만 본다:
@@ -137,15 +166,16 @@ class SenseVoiceClient:
             전체 텍스트 = 모든 text를 이어붙인 것  <- 통짜 추론에서 온다
         말속도 = 음절 수 / 발화 시간. 둘 다 정확하다.
 
-        구간별 text는 실제 그 구간의 말이 아니다(전문을 첫 구간에 몰아둔다).
-        위 두 값 말고는 쓰이지 않기 때문에 이렇게 둔다. 만약 나중에 구간별 텍스트가
-        필요해지면 구간별로 추론해야 하는데, 그러면 짧은 조각에서 띄어쓰기가 깨진다.
+        발화 구간은 asr.generate 가 내부에서 이미 계산한 것을 _captured 로 주워 쓴다
+        (예전엔 VAD 를 한 번 더 돌렸다). 구간별 text는 실제 그 구간의 말이 아니다(전문을
+        첫 구간에 몰아둔다) — 위 두 값 말고는 쓰이지 않기 때문이다.
         """
-        text = _run_asr(asr, audio)
+        text = _run_asr(asr, audio)  # 이 안에서 내부 VAD 가 돌며 _captured.spans 를 채운다
         if not text:
             return []
 
-        spans = _speech_spans(vad, audio)
+        spans = getattr(_captured, "spans", None) or []
+        spans = [(s, e) for s, e in spans if e > s]
         if not spans:
             # 텍스트는 나왔는데 VAD가 발화를 못 찾았다 — 말속도는 포기하고
             # 텍스트 평가와 꼬리질문은 살린다.
@@ -155,15 +185,6 @@ class SenseVoiceClient:
         segments = [{"text": text, "start": spans[0][0], "end": spans[0][1]}]
         segments += [{"text": "", "start": s, "end": e} for s, e in spans[1:]]
         return segments
-
-
-def _speech_spans(vad, audio) -> list[tuple[int, int]]:
-    """발화 구간 [(시작ms, 끝ms), ...]. 침묵은 빠진다."""
-    result = vad.generate(input=audio, fs=SAMPLE_RATE)
-    if not result:
-        return []
-    spans = result[0].get("value") or []
-    return [(int(s), int(e)) for s, e in spans if int(e) > int(s)]
 
 
 def _run_asr(asr, audio) -> str:
