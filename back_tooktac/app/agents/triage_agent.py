@@ -13,6 +13,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 
+from app.observability import langfuse_callbacks
+
 logger = logging.getLogger(__name__)
 
 QuestionType = Literal[
@@ -52,6 +54,7 @@ async def classify_question_type(*, question_text: str, existing_answer: str) ->
             model="gpt-4o-mini",
             api_key=os.getenv("OPENAI_API_KEY"),
             temperature=0,
+            callbacks=langfuse_callbacks(),
         )
         structured_llm = llm.with_structured_output(TriageResult)
         prompt = _TRIAGE_PROMPT.format(

@@ -13,6 +13,7 @@ import os
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from app.observability import langfuse_callbacks
 from app.tools.company_research import CompanyResearchResult
 
 
@@ -60,6 +61,7 @@ class BaseSpecialistAgent(ABC):
             model="gpt-4o-mini",
             api_key=os.getenv("OPENAI_API_KEY"),
             temperature=0.3,
+            callbacks=langfuse_callbacks(),
         )
 
     @property
