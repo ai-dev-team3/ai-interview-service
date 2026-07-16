@@ -192,7 +192,7 @@ npm run dev
 
 ## 6. CORS 및 도메인 설정
 
-백엔드의 [back_tooktac/app/main.py](back_tooktac/app/main.py)에는 CORS 허용 origin이 정의되어 있습니다.
+백엔드의 [back_tooktac/app/main.py](../back_tooktac/app/main.py)에는 CORS 허용 origin이 정의되어 있습니다.
 
 배포 시에는 다음 항목을 반드시 확인해야 합니다.
 
