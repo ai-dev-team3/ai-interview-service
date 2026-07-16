@@ -10,6 +10,7 @@ from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
+from app.observability import RESUME_STRUCTURING, feature
 from app.services.interview.plan import (
     FALLBACK_QUESTION_TYPE,
     MAX_GENERATED_QUESTIONS,
@@ -129,13 +130,15 @@ class ResumeQuestionGenerator:
         existing_block = (
             "\n".join(f"- {q}" for q in existing) if existing else "(없음)"
         )
+        # 면접 시작 중에 불려도 이 호출은 '이력서 구조화'로 집계한다.
         try:
-            data = self.chain.invoke({
-                "resume": structured,
-                "type_guide": _TYPE_GUIDE,
-                "max_questions": MAX_GENERATED_QUESTIONS,
-                "existing": existing_block,
-            })
+            with feature(RESUME_STRUCTURING):
+                data = self.chain.invoke({
+                    "resume": structured,
+                    "type_guide": _TYPE_GUIDE,
+                    "max_questions": MAX_GENERATED_QUESTIONS,
+                    "existing": existing_block,
+                })
         except Exception as e:
             logger.exception("면접 질문 생성 실패")
             raise ResumeQuestionGenerationError(str(e)) from e
@@ -165,10 +168,11 @@ class QuestionTypeClassifier:
     def classify(self, question_text: str) -> str:
         """항상 QUESTION_TYPES 안의 값을 반환한다. LLM이 실패해도 예외를 던지지 않는다."""
         try:
-            raw = self.chain.invoke({
-                "type_guide": _TYPE_GUIDE,
-                "question": _clean(question_text),
-            })
+            with feature(RESUME_STRUCTURING):
+                raw = self.chain.invoke({
+                    "type_guide": _TYPE_GUIDE,
+                    "question": _clean(question_text),
+                })
         except Exception:
             logger.warning(
                 "질문 유형 분류 실패 — %s으로 폴백 (question=%.30s)",

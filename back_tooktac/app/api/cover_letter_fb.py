@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.repository.database import get_db
 from app.repository.cover_letter_fb import CoverLetterFeedback
+from app.observability import COVER_LETTER_FEEDBACK, feature
 from app.services.user.dependencies import get_current_user
 from app.services.cover_letter.feedback_service import run_cover_letter_feedback_batch
 from app.schemas.cover_letter_fb import (
@@ -31,11 +32,12 @@ async def create_feedback(
     )
 
     # 1) 기업 리서치(1회) + 문항별 트리아지 분류 + specialist agent 첨삭 (병렬)
-    results = await run_cover_letter_feedback_batch(
-        company_name=request.company_name,
-        job_role=request.job_role,
-        entries=[entry.model_dump() for entry in request.entries],
-    )
+    with feature(COVER_LETTER_FEEDBACK):
+        results = await run_cover_letter_feedback_batch(
+            company_name=request.company_name,
+            job_role=request.job_role,
+            entries=[entry.model_dump() for entry in request.entries],
+        )
 
     # 2) 문항마다 DB row 저장 (existing_answer는 원본, revised_answer는 AI 재작성본)
     saved_rows = []

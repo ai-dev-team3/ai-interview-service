@@ -9,6 +9,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
+from app.observability import RESUME_STRUCTURING, feature
 from app.services.llm import get_chat_model
 
 logger = logging.getLogger(__name__)
@@ -71,8 +72,10 @@ class ResumeStructurer:
         )
 
     def structure(self, content: str) -> dict:
+        # 면접 시작 중에 불려도 이 호출은 '이력서 구조화'로 집계한다.
         try:
-            data = self.chain.invoke({"content": content})
+            with feature(RESUME_STRUCTURING):
+                data = self.chain.invoke({"content": content})
         except Exception as e:
             logger.exception("이력서 구조화 실패")
             raise ResumeStructuringError(str(e)) from e
