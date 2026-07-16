@@ -24,6 +24,8 @@ from typing import List
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from app.observability import langfuse_callbacks
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,6 +82,7 @@ async def research_company(company_name: str, job_role: str) -> CompanyResearchR
         model="gemini-2.5-flash",
         google_api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0,
+        callbacks=langfuse_callbacks(),
     )
 
     # with_structured_output(method="function_calling")은 다른 tool과 같이 못 써서,

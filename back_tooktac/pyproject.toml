@@ -22,6 +22,12 @@ dependencies = [
     "langchain-google-genai>=4.2.6",
     "langchain-openai>=1.3.3",
     "langgraph>=1.2.7",
+    # LLM 관측(Langfuse) — LLM 호출을 self-host Langfuse로 보내 대시보드에서 집계한다.
+    # v3는 OpenTelemetry가 protobuf>=5를 끌어와 mediapipe(protobuf<5)와 충돌하고,
+    # v2의 langchain 콜백은 옛 langchain.schema 경로를 import해 langchain-core 1.x와 안 맞는다.
+    # 그래서 v2 '저수준 클라이언트'(langchain 비의존, protobuf 비의존)만 쓰고,
+    # LangChain 연결은 app/observability 의 자체 콜백 핸들러로 직접 붙인다.
+    "langfuse>=2.53.0,<3",
     # AI - Vision
     "mediapipe>=0.10.9,<0.10.20",
     "opencv-contrib-python>=4.12.0.88",

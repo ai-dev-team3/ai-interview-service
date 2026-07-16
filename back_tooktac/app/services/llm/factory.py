@@ -16,6 +16,7 @@ from app.config import (
     OPENAI_API_KEY,
     OPENAI_MODEL_NAME,
 )
+from app.observability import langfuse_callbacks
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ def _build_gemini(
     return ChatGoogleGenerativeAI(
         model=GEMINI_MODEL_NAME,
         google_api_key=GEMINI_API_KEY,
+        callbacks=langfuse_callbacks(),
         **kwargs,
     )
 
@@ -61,6 +63,7 @@ def _build_openai(
     return ChatOpenAI(
         model=OPENAI_MODEL_NAME,
         api_key=OPENAI_API_KEY,
+        callbacks=langfuse_callbacks(),
         **kwargs,
     )
 
