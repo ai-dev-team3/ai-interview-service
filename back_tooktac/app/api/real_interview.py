@@ -21,6 +21,7 @@ import tempfile
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
+from app.observability import REAL_INTERVIEW, feature
 from app.services.interview.result_store import (
     save_answer,
     save_minimal_result,
@@ -182,9 +183,10 @@ async def _advance(
     history = real_interview.conversation(db, session.id)
     remaining = real_interview.remaining_seconds(session)
 
-    nxt = await asyncio.to_thread(
-        NextQuestionAgent().generate, resume, history, remaining
-    )
+    with feature(REAL_INTERVIEW):
+        nxt = await asyncio.to_thread(
+            NextQuestionAgent().generate, resume, history, remaining
+        )
     if nxt is None:
         # 질문을 못 만들면 면접을 멈추느니 마무리한다.
         return _closing(transcript)
@@ -261,9 +263,11 @@ async def _analyze_in_background(
             save_minimal_result(db, user_id, session_id, question, reason="음성 인식 불가")
             return
 
-        feedback, evaluation = await pipeline.analyze_and_evaluate(
-            wav_path, stt_raw, text, question_text, question_type
-        )
+        # 평가 파이프라인은 연습 면접과 공유한다 — 여기서 온 호출만 '실전면접'으로 기록된다.
+        with feature(REAL_INTERVIEW):
+            feedback, evaluation = await pipeline.analyze_and_evaluate(
+                wav_path, stt_raw, text, question_text, question_type
+            )
         labels = feedback.get("labels", {}) or {}
         score_detail = feedback.get("score_detail", {}) or {}
         total_speech = feedback.get("total_score", 0) or 0

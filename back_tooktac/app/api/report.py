@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.observability import FINAL_REPORT, feature
 from app.repository.database import get_db
 from app.services.interview.session_service import resolve_session
 from app.services.user.dependencies import get_current_user
@@ -38,7 +39,8 @@ def generate_final_report(
     parsed_data = generate_interview_json_from_session(db, session.id)
 
     generator = FinalEvaluationGenerator()
-    report = generator.generate_final_report_from_json(parsed_data)
+    with feature(FINAL_REPORT):
+        report = generator.generate_final_report_from_json(parsed_data)
 
     # 기존 보고서 제거 후 갱신
     existing_summary = db.query(FinalReportSummary).filter_by(

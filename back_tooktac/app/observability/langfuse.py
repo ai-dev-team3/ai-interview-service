@@ -25,7 +25,12 @@ from uuid import UUID
 
 from langchain_core.callbacks import BaseCallbackHandler
 
+from app.observability.context import current_feature
+
 logger = logging.getLogger(__name__)
+
+# 기능 표시가 없는 곳에서 온 호출. 대시보드에서 '미분류'로 묶인다.
+UNTAGGED = "llm-call"
 
 
 def _messages_to_text(messages: List[List[Any]]) -> str:
@@ -82,6 +87,9 @@ class LangfuseTracer(BaseCallbackHandler):
 
     LLM 호출 하나당 generation 1개(각자의 trace)를 남긴다. 비용은 Langfuse 서버가
     모델명 + usage로 자동 계산한다.
+
+    generation 이름은 그 호출이 속한 기능(context.py)으로 남긴다 — 대시보드가
+    이 이름으로 기능별 집계를 한다.
     """
 
     def __init__(self, client: Any):
@@ -91,7 +99,7 @@ class LangfuseTracer(BaseCallbackHandler):
     def on_chat_model_start(self, serialized, messages, *, run_id, metadata=None, **kwargs):
         try:
             self._gens[run_id] = self._client.generation(
-                name="llm-call",
+                name=current_feature() or UNTAGGED,
                 model=_model_name(serialized, metadata),
                 input=_messages_to_text(messages),
                 metadata=metadata,

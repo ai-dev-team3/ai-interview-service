@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.observability import CAREER_DIAGNOSIS, feature
 from app.repository.database import get_db
 from app.services.career import readiness
 from app.services.user.dependencies import get_current_user
@@ -25,11 +26,12 @@ def create_career_diagnosis(
     user_id=Depends(get_current_user),
 ):
     try:
-        return readiness.create_diagnosis(
-            db,
-            user_id,
-            cover_letter_id=payload.cover_letter_id if payload else None,
-        )
+        with feature(CAREER_DIAGNOSIS):
+            return readiness.create_diagnosis(
+                db,
+                user_id,
+                cover_letter_id=payload.cover_letter_id if payload else None,
+            )
     except readiness.CareerDiagnosisPrerequisiteError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except readiness.CareerDiagnosisConfigError as exc:

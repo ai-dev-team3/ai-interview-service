@@ -6,6 +6,7 @@ from app.services.interview.result_store import (
     save_minimal_result as _save_minimal_result,
     save_result_if_missing,
 )
+from app.observability import PRACTICE_INTERVIEW, feature
 from app.services.interview.session_service import resolve_session
 from app.services.speech.answer_pipeline import (
     AnswerAnalysisPipeline,
@@ -118,10 +119,12 @@ async def websocket_endpoint(websocket: WebSocket):
         # 10) 답변 저장 후 Vito STT·pitch 분석·LLM 평가 병렬 실행
         _save_answer(db, session.id, question, user_id, text_clean)
 
-        sf, ev = await pipeline.analyze_and_evaluate(
-            wav_path, clova_raw, text_clean,
-            question.question_text, question.question_type,
-        )
+        # 평가 파이프라인은 실전 면접과 공유한다 — 여기서 온 호출만 '연습면접'으로 기록된다.
+        with feature(PRACTICE_INTERVIEW):
+            sf, ev = await pipeline.analyze_and_evaluate(
+                wav_path, clova_raw, text_clean,
+                question.question_text, question.question_type,
+            )
         labels = sf.get("labels", {}) or {}
         score_detail = sf.get("score_detail", {}) or {}
         total_score = sf.get("total_score", 0) or 0
